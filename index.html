@@ -5,41 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>KURA 蔵 | Fashion Archive</title>
     
-    <!-- PWA / iOS WebApp 設定 -->
+    <!-- PWA / iOS WebApp 核心設定 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="KURA 蔵">
-    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="./icon.png">
+    <link rel="icon" type="image/png" href="./icon.png">
     
     <!-- 日系 POP 字體 -->
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
     
-    <!-- 基礎庫載入 (使用穩定 UMD 版本) -->
+    <!-- 核心庫載入 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Firebase Compat 腳本 -->
+    <!-- Firebase Compat (最穩定的 CDN 模式) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
-        html, body, #root { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #1a1a1a; }
+        html, body, #root { height: 100%; margin: 0; padding: 0; overflow: hidden; width: 100vw; background-color: #1a1a1a; }
         body { font-family: 'M PLUS Rounded 1c', sans-serif !important; -webkit-tap-highlight-color: transparent; }
         
         /* 核心修正：防止 iOS 點擊輸入框自動放大 (必須 >= 16px) */
-        input, select, textarea, button { font-size: 16px !important; }
+        input, select, textarea, button { font-size: 16px !important; box-sizing: border-box; }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        .safe-pt { padding-top: calc(0.5rem + var(--sat)); }
-        .safe-pb { padding-bottom: calc(1rem + var(--sab)); }
+        .safe-pt { padding-top: calc(1rem + var(--sat)); }
+        .safe-pb { padding-bottom: calc(1.5rem + var(--sab)); }
 
-        .ellipse-3d { transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 4px 0 rgba(0,0,0,0.2); }
+        .ellipse-3d { transition: all 0.3s; box-shadow: 0 4px 0 rgba(0,0,0,0.2); }
         .ellipse-3d:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
 
         @keyframes flower-float {
@@ -49,53 +50,51 @@
         .animate-flower { animation: flower-float 25s ease-in-out infinite; }
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin-slow 45s linear infinite; }
+
         .modal-enter { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
         .transition-theme { transition: background-color 0.8s, border-color 0.8s, color 0.8s; }
+        
+        /* 核心修正：確保彈窗內部絕對不溢出 */
+        .modal-inner-box { 
+            width: 100%; 
+            max-width: 430px; 
+            margin: 0 auto;
+            box-sizing: border-box; 
+            overflow-x: hidden; 
+        }
     </style>
 </head>
 <body class="h-full">
     <div id="root" class="h-full">
-        <!-- 初始 Loading 狀態，如果 React 沒跑起來，這行字會一直留著 -->
-        <div style="color: white; display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; text-align: center; padding: 20px;">
-            <div style="font-size: 24px; margin-bottom: 10px;">蔵 KURA</div>
-            <div style="font-size: 14px; opacity: 0.5;">正在啟動收藏庫...</div>
+        <!-- 備用介面 -->
+        <div id="fallback-ui" style="color: white; display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; text-align: center; padding: 30px; background: #1a1a1a;">
+            <div style="font-size: 28px; font-weight: 900; margin-bottom: 20px; color: #ec4899;">KURA 蔵</div>
+            <div style="font-size: 14px; opacity: 0.6;">收藏庫載入中...</div>
         </div>
     </div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // ==========================================
-        // 重要：請將下方的引號內容替換成你自己的 Firebase Console 配置
-        // ==========================================
-        const myPersonalConfig = {
+        // --- Sarah 的 Firebase 配置 (已填入) ---
+        const sarahFirebaseConfig = {
             apiKey: "AIzaSyD2GJHRM4vTUVrCGhheCK9UoEmvrwDiztU",
-    authDomain: "kura-archive.firebaseapp.com",
-    projectId: "kura-archive",
-    storageBucket: "kura-archive.firebasestorage.app",
-    messagingSenderId: "1005755387682",
-    appId: "1:1005755387682:web:d3844fc4e22da3ddaddf7b",
-    measurementId: "G-CT03C68RDC"
+            authDomain: "kura-archive.firebaseapp.com",
+            projectId: "kura-archive",
+            storageBucket: "kura-archive.firebasestorage.app",
+            messagingSenderId: "1005755387682",
+            appId: "1:1005755387682:web:d3844fc4e22da3ddaddf7b",
+            measurementId: "G-CT03C68RDC"
         };
 
-        // --- 智慧環境偵測 ---
-        let finalConfig = {};
-        try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                finalConfig = JSON.parse(__firebase_config);
-            } else {
-                finalConfig = myPersonalConfig;
-            }
-        } catch (e) { console.error("Config Error"); }
-
         // 初始化 Firebase
-        if (finalConfig.apiKey && !finalConfig.apiKey.includes("你的")) {
-            if (!firebase.apps.length) firebase.initializeApp(finalConfig);
+        if (!firebase.apps.length) {
+            firebase.initializeApp(sarahFirebaseConfig);
         }
-        
-        const db = firebase.firestore?.();
-        const auth = firebase.auth?.();
+        const auth = firebase.auth();
+        const db = firebase.firestore();
         const app_collection_id = 'kura_archive_sarah_v3';
         const CURRENCY_RATES = { 'JPY': 0.21, 'USD': 32.5, 'KRW': 0.024, 'EUR': 35.2, 'TWD': 1 };
 
@@ -112,7 +111,6 @@
         };
 
         const App = () => {
-            const isConfigMissing = !finalConfig.apiKey || finalConfig.apiKey.includes("你的");
             const [user, setUser] = useState(null);
             const [items, setItems] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -131,13 +129,12 @@
             const bgContainer = isDarkMode ? '#1a1a1a' : '#bcaaa4';
 
             useEffect(() => {
-                if (isConfigMissing) return;
                 const unsub = auth.onAuthStateChanged(u => {
                     if (!u) auth.signInAnonymously();
                     setUser(u);
                 });
                 return () => unsub();
-            }, [isConfigMissing]);
+            }, []);
 
             useEffect(() => {
                 if (!user) return;
@@ -163,24 +160,26 @@
             const brandsList = useMemo(() => ["全部", ...new Set(items.map(i => i.brand).filter(Boolean))], [items]);
             const categoriesList = useMemo(() => ["全部", ...new Set(items.map(i => i.category).filter(Boolean))], [items]);
             const bgFlowers = useMemo(() => [
-                { t: 15, l: 10 }, { t: 10, l: 70 }, { t: 40, l: 20 }, { t: 45, l: 80 },
-                { t: 70, l: 15 }, { t: 80, l: 75 }, { t: 30, l: 45 }, { t: 65, l: 50 }
-            ].map((p, i) => ({ ...p, id: i, size: Math.random() * 80 + 120, delay: Math.random() * -20, duration: 20 + Math.random() * 10 })), []);
+                { t: 15, l: 10 }, { t: 8, l: 72 }, { t: 40, l: 18 }, { t: 42, l: 82 },
+                { t: 72, l: 12 }, { t: 78, l: 78 }, { t: 32, l: 48 }, { t: 62, l: 52 },
+                { t: 25, l: 30 }, { t: 55, l: 60 }, { t: 85, l: 40 }, { t: 5, l: 45 },
+                { t: 90, l: 20 }, { t: 50, l: 10 }, { t: 20, l: 90 }
+            ].map((p, i) => ({ ...p, id: i, size: Math.random() * 80 + 130, delay: Math.random() * -10, duration: 25 + Math.random() * 5 })), []);
 
-            const fetchMetadata = async (url = newItem.url, isAutoSync = false, syncId = null) => {
+            const fetchMetadata = async (url = newItem.url, isAuto = false, sId = null) => {
                 if (!url) return;
-                if (isAutoSync) setIsUpdating(true); else setIsFetching(true);
+                if (isAuto) setIsUpdating(true); else setIsFetching(true);
                 try {
                     const apiKey = ""; // Runtime 注入
+                    const prompt = `分析網址並回傳 JSON：{"title": "商品名", "price": "數字", "currency": "JPY/USD/TWD", "image": "圖片網址", "brand": "品牌", "category": "分類"}。網址：${url}`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: `分析網址並以 JSON 回傳最新商品資訊(title, price, currency, image, brand, category)：${url}` }] }], generationConfig: { responseMimeType: "application/json" } })
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
                     });
                     const json = await res.json();
                     const meta = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
-                    if (isAutoSync && syncId) {
-                        await db.collection('artifacts').doc(app_collection_id).collection('users').doc(user.uid).collection('wishlist').doc(syncId).update({ price: meta.price, currency: meta.currency });
+                    if (isAuto && sId) {
+                        await db.collection('artifacts').doc(app_collection_id).collection('users').doc(user.uid).collection('wishlist').doc(sId).update({ price: meta.price, currency: meta.currency });
                     } else { setNewItem(prev => ({ ...prev, ...meta })); }
                 } catch (e) { console.error(e); } finally { setIsFetching(false); setIsUpdating(false); }
             };
@@ -195,77 +194,73 @@
                 setIsModalOpen(false);
             };
 
-            if (isConfigMissing) {
-                return (
-                    <div className="flex items-center justify-center h-full bg-black text-white p-10 text-center font-pop">
-                        <div className="max-w-xs">
-                            <h2 className="text-3xl font-black mb-6 drop-shadow-[0_0_15px_#ec4899]">KURA 蔵</h2>
-                            <div className="bg-white/5 border border-white/10 p-6 rounded-3xl mb-8">
-                                <p className="text-sm font-bold mb-4">⚠️ 配置錯誤</p>
-                                <p className="opacity-60 text-[12px] leading-relaxed">請在檔案中搜尋 <code className="bg-pink-500/20 px-1 rounded text-pink-400">myPersonalConfig</code>，並填入你的 Firebase 配置後存檔。</p>
-                            </div>
-                            <div className="animate-spin-slow inline-block text-pink-500 opacity-40"><Icon name="refresh" size={48} /></div>
-                        </div>
-                    </div>
-                );
-            }
+            const deleteItem = (id) => {
+                if (user) db.collection('artifacts').doc(app_collection_id).collection('users').doc(user.uid).collection('wishlist').doc(id).delete();
+            };
 
             const filteredItems = items.filter(i => (activeTab === '全部' || i.category === activeTab) && (activeBrand === '全部' || i.brand === activeBrand));
 
             return (
                 <div className="flex justify-center h-full w-full transition-theme font-pop" style={{ backgroundColor: bgMain }}>
                     <div className={`w-full max-w-[430px] h-full flex flex-col relative shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden border-x-[3px] transition-theme ${isDarkMode ? 'border-pink-900/30 bg-[#1a1a1a]' : 'border-blue-900/10 bg-[#bcaaa4]'}`}>
+                        
+                        {/* 背景碎花 */}
                         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
                             {bgFlowers.map(f => (
-                                <div key={f.id} className="absolute animate-flower opacity-[0.35]" style={{ top: `${f.t}%`, left: `${f.l}%`, width: f.size, height: f.size, animationDelay: `${f.delay}s`, animationDuration: `${f.duration}s`, color: themeColor }}>
+                                <div key={f.id} className="absolute animate-flower opacity-[0.35]" 
+                                     style={{ top: `${f.t}%`, left: `${f.l}%`, width: f.size, height: f.size, animationDelay: `${f.delay}s`, animationDuration: `${f.duration}s`, color: themeColor }}>
                                     <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/><path d="M12 22C12 22 20 18 20 12C20 6 12 2 12 2C12 2 4 6 4 12C4 18 12 22 12 22Z" opacity="0.3"/></svg>
                                 </div>
                             ))}
                         </div>
+
                         <header className={`sticky top-0 z-50 backdrop-blur-xl border-b pb-6 px-6 transition-all shadow-xl safe-pt ${isDarkMode ? 'bg-[#1a1a1a]/90 border-pink-900/50' : 'bg-[#bcaaa4]/90 border-blue-900/20'}`}>
-                            <div className="flex justify-between items-center relative z-10">
+                            <div className="flex justify-between items-center relative z-10 font-pop">
                                 <div>
-                                    <h1 className={`text-4xl font-black italic flex items-baseline gap-2 ${isDarkMode ? 'drop-shadow-[0_0_15px_#ec4899] text-white' : 'drop-shadow-[0_0_10px_rgba(26,35,126,0.2)] text-[#1a237e]'}`}>KURA <span className={isDarkMode ? 'text-pink-400' : 'text-[#303f9f]'}>蔵</span></h1>
-                                    <div className={`h-[3px] w-14 mt-2 flex items-center gap-2 ${isDarkMode ? 'bg-pink-500 shadow-[0_0_10px_#ec4899]' : 'bg-[#1a237e]'}`}>{isUpdating && <Icon name="refresh" size={12} className="animate-spin" />}</div>
+                                    <h1 className={`text-4xl font-black italic flex items-baseline gap-2 ${isDarkMode ? 'drop-shadow-[0_0_15px_#ec4899] text-white' : 'drop-shadow-[0_0_15px_rgba(26,35,126,0.2)] text-[#1a237e]'}`}>KURA <span className={isDarkMode ? 'text-pink-400' : 'text-[#303f9f]'}>蔵</span></h1>
+                                    <div className={`h-[3px] w-14 mt-2 transition-theme ${isDarkMode ? 'bg-pink-500 shadow-[0_0_10px_#ec4899]' : 'bg-[#1a237e]'}`}>{isUpdating && <Icon name="refresh" size={12} className="animate-spin" />}</div>
                                 </div>
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full border border-current opacity-70 bg-white/5 active:scale-90">{isDarkMode ? <Icon name="sun" size={20} /> : <Icon name="moon" size={20} />}</button>
+                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full border border-current opacity-70 bg-white/5 active:scale-90 transition-all">{isDarkMode ? <Icon name="sun" size={20} /> : <Icon name="moon" size={20} />}</button>
                             </div>
                         </header>
-                        <nav className="z-40 py-6 px-6 space-y-5 overflow-x-auto no-scrollbar">
+
+                        <nav className="z-40 py-6 px-6 space-y-5 overflow-x-auto no-scrollbar font-pop">
                             <div className="flex gap-2.5">
                                 {categoriesList.map(cat => (
                                     <button key={cat} onClick={() => setActiveTab(cat)} className={`ellipse-3d whitespace-nowrap px-5 py-2 text-[10px] font-black uppercase rounded-full border transition-all ${activeTab === cat ? (isDarkMode ? 'bg-pink-600 border-pink-400 shadow-[0_0_20px_#ec4899] text-white' : 'bg-[#1a237e] border-[#1a237e] text-white') : 'opacity-40 border-current bg-white/5'}`}>{cat}</button>
                                 ))}
                             </div>
-                            <div className="flex gap-8 border-y border-current/10 py-4">
+                            <div className="flex gap-8 border-y border-current/10 py-4 font-black">
                                 {brandsList.map(brand => (
-                                    <button key={brand} onClick={() => setActiveBrand(brand)} className={`whitespace-nowrap text-[11px] font-black uppercase transition-all ${activeBrand === brand ? 'scale-125 opacity-100 font-black' : 'opacity-30'}`}>{brand}</button>
+                                    <button key={brand} onClick={() => setActiveBrand(brand)} className={`whitespace-nowrap text-[11px] uppercase transition-all ${activeBrand === brand ? 'scale-125 opacity-100' : 'opacity-30'}`}>{brand}</button>
                                 ))}
                             </div>
                         </nav>
-                        <main className="flex-1 px-5 py-4 z-20 overflow-y-auto no-scrollbar">
+
+                        <main className="flex-1 px-5 py-4 z-20 overflow-y-auto no-scrollbar font-pop">
                             {loading ? <div className="text-center py-32 animate-pulse opacity-50 font-black">SYNCING VAULT...</div> : (
-                                <div className="grid grid-cols-2 gap-5 pb-40">
+                                <div className="grid grid-cols-2 gap-5 pb-48">
                                     {filteredItems.map(item => (
                                         <div key={item.id} className={`group relative flex flex-col p-3 rounded-[2.2rem] border transition-all duration-500 ${isDarkMode ? 'bg-white/5 border-white/10 hover:border-pink-500/50' : 'bg-white/40 border-[#1a237e]/10 hover:border-[#1a237e]/40 shadow-sm'} hover:shadow-2xl`}>
-                                            <div className="aspect-[4/5] rounded-[1.8rem] overflow-hidden mb-4 relative bg-black/10">
+                                            <div className="aspect-[4/5] rounded-[1.8rem] overflow-hidden mb-4 relative bg-black/10 shadow-inner">
                                                 <img src={item.image} alt="" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 scale-110 group-hover:scale-100" />
-                                                <button onClick={(e) => { e.preventDefault(); db.collection('artifacts').doc(app_collection_id).collection('users').doc(user.uid).collection('wishlist').doc(item.id).delete(); }} className="absolute top-2 right-2 p-2.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500">✕</button>
-                                                <div className={`absolute bottom-3 left-3 px-3 py-1 text-[9px] font-black text-white rounded-lg ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}>{item.brand}</div>
+                                                <button onClick={() => deleteItem(item.id)} className="absolute top-2 right-2 p-2.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500">✕</button>
+                                                <div className={`absolute bottom-3 left-3 px-3 py-1 text-[9px] font-black text-white rounded-lg shadow-xl ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}>{item.brand}</div>
                                             </div>
                                             <h3 className="text-[12px] font-black line-clamp-2 h-9 mb-3 leading-snug">{item.title}</h3>
                                             <div className="mt-auto flex justify-between items-end border-t border-current/10 pt-3">
                                                 <div>
-                                                    <div className={`text-[14px] font-black font-mono tracking-tighter transition-colors duration-1000 ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>{item.currency} {item.price}</div>
-                                                    <div className="text-[9px] opacity-40 font-bold italic tracking-widest mt-0.5">≈ ${Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))} TWD</div>
+                                                    <div className={`text-sm font-black ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>{item.currency} {item.price}</div>
+                                                    <div className="text-[9px] opacity-40 italic">≈ TWD ${Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))}</div>
                                                 </div>
-                                                <a href={item.url} target="_blank" onClick={() => setLastVisitedId(item.id)} className="p-3 rounded-2xl bg-current/10 hover:bg-current/20 active:scale-90 transition-all shadow-sm"><Icon name="external" size={16} /></a>
+                                                <a href={item.url} target="_blank" onClick={() => setLastVisitedId(item.id)} className="p-3 rounded-2xl bg-current/10 hover:bg-current/20 active:scale-90 transition-all"><Icon name="external" size={16} /></a>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </main>
+
                         <div className="fixed bottom-0 right-0 p-8 z-50 safe-pb">
                             <button onClick={() => setIsModalOpen(true)} className={`group relative p-6 rounded-full bg-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] active:scale-90 transition-all overflow-hidden border-2 ${isDarkMode ? 'border-pink-500 shadow-pink-500/20' : 'border-[#1a237e] shadow-[#1a237e]/20'}`}>
                                 <div className={`absolute inset-0 opacity-0 group-hover:opacity-40 transition-opacity ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}></div>
@@ -273,19 +268,20 @@
                                 <Icon name="plus" size={32} />
                             </button>
                         </div>
-                        <footer className="pt-24 pb-40 text-center opacity-30 text-[10px] uppercase font-black tracking-[0.5em] safe-pb px-10">Designed by Sarah • 2025</footer>
+                        <footer className="pt-24 pb-48 text-center opacity-30 text-[10px] uppercase font-black tracking-[0.5em] safe-pb px-10">Designed by Sarah • 2025</footer>
+
                         {isModalOpen && (
                             <div className="fixed inset-0 z-[100] flex items-end justify-center">
                                 <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
-                                <div className={`relative w-full max-w-md p-8 rounded-t-[3.5rem] border-t-2 modal-enter safe-pb ${isDarkMode ? 'bg-[#222222] border-pink-900/40 text-white' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
-                                    <div className={`h-2.5 w-24 absolute top-4 left-1/2 -translate-x-1/2 rounded-full opacity-20 ${isDarkMode ? 'bg-white' : 'bg-[#1a237e]'}`}></div>
-                                    <div className="flex justify-between items-center mb-8 mt-4 font-pop"><h2 className="text-3xl font-black italic uppercase flex items-center gap-3">Vault Entry <Icon name="zap" className="animate-bounce" /></h2><button onClick={() => setIsModalOpen(false)} className="p-2 opacity-50 text-2xl">✕</button></div>
-                                    <div className="space-y-5 overflow-y-auto no-scrollbar max-h-[75vh] pb-10">
-                                        <div className="space-y-2 font-pop"><label className="text-[10px] font-black uppercase opacity-60">Blueprint URL</label><div className="flex gap-2"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={() => fetchMetadata()} className={`px-6 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500' : 'bg-[#1a237e] hover:bg-[#0d1642]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
-                                        <div className="space-y-3 font-pop"><div className="flex gap-4 border-b border-current/10 pb-2"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`text-[10px] font-black tracking-widest pb-1 border-b-2 ${newItem.imageMode === 'url' ? 'border-current' : 'opacity-20 border-transparent'}`}>LINK</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`text-[10px] font-black tracking-widest pb-1 border-b-2 ${newItem.imageMode === 'upload' ? 'border-current' : 'opacity-20 border-transparent'}`}>UPLOAD</button></div>{newItem.imageMode === 'url' ? <input placeholder="Image URL..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : <div className="border-2 border-dashed border-current/20 rounded-2xl p-6 text-center cursor-pointer bg-white/5" onClick={() => fileInputRef.current.click()}><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => { const r = new FileReader(); r.onloadend = () => setNewItem(p => ({ ...p, image: r.result, imageMode: 'upload' })); r.readAsDataURL(e.target.files[0]); }} /><Icon name="upload" className="mx-auto mb-2 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase">CHOOSE FILE</p></div>}</div>
-                                        <div className="grid grid-cols-2 gap-5 font-pop"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Artifact Title</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Brand</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.brand} onChange={e => setNewItem({...newItem, brand: e.target.value})} /></div></div>
-                                        <div className="grid grid-cols-2 gap-5 font-pop"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Category</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} /></div><div className="grid grid-cols-2 gap-2"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Price</label><input type="number" className="w-full bg-transparent border-b-2 border-current/20 p-3 text-sm outline-none" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Curr</label><select className="w-full bg-transparent border-b-2 border-current/20 p-3 text-xs outline-none" value={newItem.currency} onChange={e => setNewItem({...newItem, currency: e.target.value})}>{Object.keys(CURRENCY_RATES).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div></div></div>
-                                        <button onClick={addItem} className={`w-full py-6 rounded-[2.5rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 font-pop ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40' : 'bg-[#1a237e] shadow-[#1a237e]/30'}`}>Archive Consignment 蔵</button>
+                                <div className={`relative w-full max-w-[430px] p-6 rounded-t-[3.5rem] border-t-2 modal-enter safe-pb modal-inner-box ${isDarkMode ? 'bg-[#222222] border-pink-900/40 text-white' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
+                                    <div className={`h-2 w-16 absolute top-4 left-1/2 -translate-x-1/2 rounded-full opacity-20 ${isDarkMode ? 'bg-white' : 'bg-[#1a237e]'}`}></div>
+                                    <div className="flex justify-between items-center mb-6 mt-4 font-pop"><h2 className="text-2xl font-black italic uppercase flex items-center gap-3">Vault Entry <Icon name="zap" className="animate-bounce" /></h2><button onClick={() => setIsModalOpen(false)} className="p-2 opacity-50 text-2xl font-pop">✕</button></div>
+                                    <div className="space-y-4 overflow-y-auto no-scrollbar max-h-[75vh] pb-10 px-2 font-pop">
+                                        <div className="space-y-1"><label className="text-[10px] font-black uppercase opacity-60">Blueprint URL</label><div className="flex gap-2"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none rounded-xl w-full" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={() => fetchMetadata()} className={`px-5 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500' : 'bg-[#1a237e] hover:bg-[#0d1642]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
+                                        <div className="space-y-2"><div className="flex gap-4 border-b border-current/10 pb-1 font-black"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`text-[10px] tracking-widest pb-1 border-b-2 ${newItem.imageMode === 'url' ? 'border-current' : 'opacity-20 border-transparent'}`}>LINK</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`text-[10px] tracking-widest pb-1 border-b-2 ${newItem.imageMode === 'upload' ? 'border-current' : 'opacity-20 border-transparent'}`}>UPLOAD</button></div>{newItem.imageMode === 'url' ? <input placeholder="Image URL..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : <div className="border-2 border-dashed border-current/20 rounded-2xl p-4 text-center cursor-pointer bg-white/5" onClick={() => fileInputRef.current.click()}><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => { const r = new FileReader(); r.onloadend = () => setNewItem(p => ({ ...p, image: r.result, imageMode: 'upload' })); r.readAsDataURL(e.target.files[0]); }} /><Icon name="upload" className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase">CHOOSE FILE</p></div>}</div>
+                                        <div className="grid grid-cols-2 gap-4"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Title</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Brand</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.brand} onChange={e => setNewItem({...newItem, brand: e.target.value})} /></div></div>
+                                        <div className="grid grid-cols-2 gap-4"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Category</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} /></div><div className="grid grid-cols-2 gap-2"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Price</label><input type="number" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Curr</label><select className="w-full bg-transparent border-b-2 border-current/20 p-2 text-xs outline-none font-mono" value={newItem.currency} onChange={e => setNewItem({...newItem, currency: e.target.value})}>{Object.keys(CURRENCY_RATES).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div></div></div>
+                                        <button onClick={addItem} className={`w-full py-5 rounded-[2rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 font-pop ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40 hover:bg-pink-500' : 'bg-[#1a237e] shadow-[#1a237e]/30'}`}>Archive Consignment 蔵</button>
                                     </div>
                                 </div>
                             </div>
@@ -294,7 +290,7 @@
                 </div>
             );
         };
-        window.addEventListener('DOMContentLoaded', () => { ReactDOM.createRoot(document.getElementById('root')).render(<App />); });
+        window.addEventListener('load', () => { ReactDOM.createRoot(document.getElementById('root')).render(<App />); });
     </script>
 </body>
 </html>
