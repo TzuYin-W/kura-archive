@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>KURA 蔵 | Fashion Archive</title>
     
-    <!-- PWA / iOS WebApp 核心設定 -->
+    <!-- PWA / iOS WebApp 設定 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="KURA 蔵">
@@ -15,13 +15,13 @@
     <!-- 日系 POP 字體 -->
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
     
-    <!-- 核心庫載入 -->
+    <!-- 基礎庫載入 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Firebase Compat (CDN 穩定版) -->
+    <!-- Firebase Compat (最穩定的 CDN 方式) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -31,8 +31,8 @@
         html, body, #root { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #1a1a1a; width: 100vw; }
         body { font-family: 'M PLUS Rounded 1c', sans-serif !important; -webkit-tap-highlight-color: transparent; }
         
-        /* 核心修正：防止 iOS 點擊輸入框自動放大 */
-        input, select, textarea, button { font-size: 16px !important; box-sizing: border-box; }
+        /* 核心修正：防止 iOS 點擊輸入框自動放大 (必須 >= 16px) */
+        input, select, textarea, button { font-size: 16px !important; box-sizing: border-box; outline: none; }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -56,31 +56,28 @@
         
         .transition-theme { transition: background-color 0.8s, border-color 0.8s, color 0.8s; }
         
-        /* 徹底修正彈窗內容，確保不產生左右滑動 */
-        .modal-inner-box { 
-            width: 100%; 
-            max-width: 430px; 
-            margin: 0 auto; 
-            box-sizing: border-box; 
-            overflow-x: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-        .modal-content-wrapper {
-            padding: 0 1.25rem;
+        /* 徹底修正 Modal 內部寬度，確保內容剛好且不產生左右滑動 */
+        .modal-scroll-area {
             width: 100%;
+            padding: 0 1.5rem; /* 左右固定內距 */
             box-sizing: border-box;
             overflow-x: hidden;
+            overflow-y: auto;
+            max-height: 75vh;
+        }
+        .input-full {
+            width: 100% !important;
+            box-sizing: border-box;
         }
     </style>
 </head>
-<body class="h-full overflow-hidden">
-    <div id="root" class="h-full overflow-hidden"></div>
+<body class="h-full">
+    <div id="root" class="h-full"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Sarah 專屬配置 ---
+        // --- Sarah 的 Firebase 配置 ---
         const firebaseConfig = {
             apiKey: "AIzaSyD2GJHRM4vTUVrCGhheCK9UoEmvrwDiztU",
             authDomain: "kura-archive.firebaseapp.com",
@@ -95,10 +92,10 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
-        
-        // 核心持久化路徑
         const appId = 'kura_archive_sarah_v3';
-        const getCollectionPath = () => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('wishlist');
+
+        // 核心持久化路徑
+        const getCollectionRef = () => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('wishlist');
 
         const CURRENCY_RATES = { 'JPY': 0.21, 'USD': 32.5, 'KRW': 0.024, 'EUR': 35.2, 'TWD': 1 };
 
@@ -133,23 +130,17 @@
             const bgContainer = isDarkMode ? '#1a1a1a' : '#bcaaa4';
 
             useEffect(() => {
-                const initAuth = async () => {
-                    await auth.signInAnonymously();
-                };
-                initAuth();
+                auth.signInAnonymously().catch(console.error);
                 const unsub = auth.onAuthStateChanged(setUser);
                 return () => unsub();
             }, []);
 
             useEffect(() => {
                 if (!user) return;
-                const unsub = getCollectionPath().orderBy('createdAt', 'desc').onSnapshot(snap => {
+                const unsub = getCollectionRef().orderBy('createdAt', 'desc').onSnapshot(snap => {
                     setItems(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoading(false);
-                }, err => {
-                    console.error("Database Error:", err);
-                    setLoading(false);
-                });
+                }, err => { console.error("Database Error:", err); setLoading(false); });
                 return () => unsub();
             }, [user]);
 
@@ -181,12 +172,12 @@
                     const apiKey = ""; // Runtime 注入
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: `你是一個購物助手，請精確分析並返回 JSON (title, price, currency, image, brand, category): ${url}` }] }], generationConfig: { responseMimeType: "application/json" } })
+                        body: JSON.stringify({ contents: [{ parts: [{ text: `你是一個購物助手，請將此網址資訊以 JSON 回傳(title, price, currency, image, brand, category): ${url}` }] }], generationConfig: { responseMimeType: "application/json" } })
                     });
                     const json = await res.json();
                     const meta = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
                     if (isAuto && sId) {
-                        await getCollectionPath().doc(sId).update({ price: meta.price, currency: meta.currency });
+                        await getCollectionRef().doc(sId).update({ price: meta.price, currency: meta.currency });
                     } else {
                         setNewItem(prev => ({ ...prev, ...meta, url: url }));
                     }
@@ -196,17 +187,13 @@
             const addItem = async () => {
                 if (!newItem.title || !user) return;
                 try {
-                    await getCollectionPath().add({
+                    await getCollectionRef().add({
                         ...newItem,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     setNewItem({ url: '', title: '', price: '', currency: 'JPY', category: '', brand: '', image: '', imageMode: 'url' });
                     setIsModalOpen(false);
-                } catch (e) { console.error("Save Error", e); }
-            };
-
-            const deleteItem = (id) => {
-                if (confirm("移除這件珍藏？")) getCollectionPath().doc(id).delete();
+                } catch (e) { console.error("Save Fail", e); }
             };
 
             const filteredItems = items.filter(i => (activeTab === '全部' || i.category === activeTab) && (activeBrand === '全部' || i.brand === activeBrand));
@@ -217,8 +204,7 @@
                         
                         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
                             {bgFlowers.map(f => (
-                                <div key={f.id} className="absolute animate-flower opacity-[0.35]" 
-                                     style={{ top: `${f.t}%`, left: `${f.l}%`, width: f.size, height: f.size, animationDelay: `${f.delay}s`, animationDuration: `${f.duration}s`, color: themeColor }}>
+                                <div key={f.id} className="absolute animate-flower opacity-[0.3]" style={{ top: `${f.t}%`, left: `${f.l}%`, width: f.size, height: f.size, animationDelay: `${f.delay}s`, animationDuration: `${f.duration}s`, color: themeColor }}>
                                     <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/><path d="M12 22C12 22 20 18 20 12C20 6 12 2 12 2C12 2 4 6 4 12C4 18 12 22 12 22Z" opacity="0.3"/></svg>
                                 </div>
                             ))}
@@ -242,26 +228,26 @@
                             </div>
                             <div className="flex gap-8 border-y border-current/10 py-4 font-black">
                                 {brandsList.map(brand => (
-                                    <button key={brand} onClick={() => setActiveBrand(brand)} className={`whitespace-nowrap text-[11px] uppercase transition-all ${activeBrand === brand ? 'scale-125 opacity-100' : 'opacity-30'}`}>{brand}</button>
+                                    <button key={brand} onClick={() => setActiveBrand(brand)} className={`whitespace-nowrap text-[11px] uppercase transition-all ${activeBrand === brand ? 'scale-125 opacity-100 font-black' : 'opacity-30'}`}>{brand}</button>
                                 ))}
                             </div>
                         </nav>
 
                         <main className="flex-1 px-5 py-4 z-20 overflow-y-auto no-scrollbar font-pop">
-                            {loading ? <div className="text-center py-32 animate-pulse font-black opacity-50">SYNCING VAULT...</div> : (
+                            {loading ? <div className="text-center py-32 animate-pulse font-black opacity-30 tracking-widest uppercase">Syncing Archive...</div> : (
                                 <div className="grid grid-cols-2 gap-5 pb-48">
                                     {filteredItems.map(item => (
                                         <div key={item.id} className={`group relative flex flex-col p-3 rounded-[2.2rem] border transition-all duration-500 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white/40 border-[#1a237e]/10'} hover:shadow-2xl`}>
                                             <div className="aspect-[4/5] rounded-[1.8rem] overflow-hidden mb-4 relative bg-black shadow-inner">
                                                 <img src={item.image} alt="" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 scale-110 group-hover:scale-100" />
-                                                <button onClick={() => deleteItem(item.id)} className="absolute top-2 right-2 p-2.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600">✕</button>
-                                                <div className={`absolute bottom-3 left-3 px-3 py-1 text-[9px] font-black text-white rounded-lg shadow-xl ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}>{item.brand}</div>
+                                                <button onClick={(e) => { e.preventDefault(); if(confirm("移除這項收藏？")) getCollectionRef().doc(item.id).delete(); }} className="absolute top-2 right-2 p-2.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all">✕</button>
+                                                <div className={`absolute bottom-3 left-3 px-3 py-1 text-[9px] font-black text-white rounded-lg shadow-xl border ${isDarkMode ? 'bg-pink-600 border-pink-400/30' : 'bg-[#1a237e] border-white/20'}`}>{item.brand}</div>
                                             </div>
                                             <h3 className="text-[12px] font-black line-clamp-2 h-9 mb-3 leading-snug">{item.title}</h3>
                                             <div className="mt-auto flex justify-between items-end border-t border-current/10 pt-3">
                                                 <div>
-                                                    <div className={`text-sm font-black ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>{item.currency} {item.price}</div>
-                                                    <div className="text-[9px] opacity-40 italic">≈ TWD ${Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))}</div>
+                                                    <div className={`text-[14px] font-black font-mono tracking-tighter ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>{item.currency} {item.price}</div>
+                                                    <div className="text-[9px] opacity-40 font-bold italic tracking-widest mt-0.5">≈ ${Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))} TWD</div>
                                                 </div>
                                                 <a href={item.url} target="_blank" onClick={() => setLastVisitedId(item.id)} className="p-3 rounded-2xl bg-current/10 hover:bg-current/20 active:scale-90 transition-all"><Icon name="external" size={16} /></a>
                                             </div>
@@ -272,31 +258,31 @@
                         </main>
 
                         <div className="fixed bottom-0 right-0 p-8 z-[60] safe-pb">
-                            <button onClick={() => setIsModalOpen(true)} className={`group relative p-6 rounded-full bg-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] active:scale-90 transition-all overflow-hidden border-2 ${isDarkMode ? 'border-pink-500' : 'border-[#1a237e]'}`}>
+                            <button onClick={() => setIsModalOpen(true)} className={`group relative p-6 rounded-full bg-black text-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] active:scale-90 transition-all overflow-hidden border-2 ${isDarkMode ? 'border-pink-500 shadow-pink-500/20' : 'border-[#1a237e] shadow-[#1a237e]/20'}`}>
                                 <div className={`absolute inset-0 opacity-0 group-hover:opacity-40 transition-opacity ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}></div>
                                 <div className="absolute inset-0 animate-spin-slow opacity-20 scale-150 pointer-events-none"><svg viewBox="0 0 24 24" fill="currentColor" className={isDarkMode ? 'text-pink-400' : 'text-[#3f51b5]'}><circle cx="12" cy="12" r="5"/></svg></div>
                                 <Icon name="plus" size={32} />
                             </button>
                         </div>
-                        <footer className="pt-24 pb-48 text-center opacity-30 text-[10px] uppercase font-black tracking-[0.5em] safe-pb px-10">Designed by Sarah • 2025</footer>
+                        <footer className="pt-24 pb-48 text-center opacity-30 text-[10px] uppercase font-black tracking-[0.5em] safe-pb px-10 font-pop">Designed by Sarah • 2025</footer>
 
                         {isModalOpen && (
                             <div className="fixed inset-0 z-[100] flex items-end justify-center">
                                 <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
-                                <div className={`relative modal-inner-box rounded-t-[3.5rem] border-t-2 modal-enter safe-pb transition-all duration-500 ${isDarkMode ? 'bg-[#222222] border-pink-900/40 text-white' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
+                                <div className={`relative w-full max-w-[430px] rounded-t-[3.5rem] border-t-2 modal-enter safe-pb transition-all duration-500 overflow-hidden ${isDarkMode ? 'bg-[#222222] border-pink-900/50 text-white' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
                                     <div className={`h-2 w-16 absolute top-4 left-1/2 -translate-x-1/2 rounded-full opacity-20 ${isDarkMode ? 'bg-white' : 'bg-[#1a237e]'}`}></div>
                                     <div className="flex justify-between items-center px-8 mb-6 mt-4 font-pop">
                                         <h2 className="text-2xl font-black italic uppercase flex items-center gap-3">Vault Entry <Icon name="zap" className="animate-bounce" /></h2>
                                         <button onClick={() => setIsModalOpen(false)} className="p-2 opacity-50 text-2xl">✕</button>
                                     </div>
                                     
-                                    <div className="modal-content-wrapper no-scrollbar max-h-[75vh] font-pop pb-10">
-                                        <div className="space-y-4">
-                                            <div className="space-y-1"><label className="text-[10px] font-black uppercase opacity-60">Blueprint URL</label><div className="flex gap-2 w-full"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none rounded-xl w-full" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={() => fetchMetadata()} className={`px-5 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500' : 'bg-[#1a237e] hover:bg-[#0d1642]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
-                                            <div className="space-y-2"><div className="flex gap-4 border-b border-current/10 pb-1 font-black"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`text-[10px] tracking-widest pb-1 border-b-2 ${newItem.imageMode === 'url' ? 'border-current' : 'opacity-20 border-transparent'}`}>LINK</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`text-[10px] tracking-widest pb-1 border-b-2 ${newItem.imageMode === 'upload' ? 'border-current' : 'opacity-20 border-transparent'}`}>UPLOAD</button></div>{newItem.imageMode === 'url' ? <input placeholder="Image URL..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : <div className="border-2 border-dashed border-current/20 rounded-2xl p-4 text-center cursor-pointer bg-white/5" onClick={() => fileInputRef.current.click()}><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => { const r = new FileReader(); r.onloadend = () => setNewItem(p => ({ ...p, image: r.result, imageMode: 'upload' })); r.readAsDataURL(e.target.files[0]); }} /><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase">CHOOSE FILE</p></div>}</div>
-                                            <div className="grid grid-cols-2 gap-4 w-full"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Title</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Brand</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.brand} onChange={e => setNewItem({...newItem, brand: e.target.value})} /></div></div>
-                                            <div className="grid grid-cols-2 gap-4 w-full"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Category</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} /></div><div className="grid grid-cols-2 gap-2"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Price</label><input type="number" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Curr</label><select className="w-full bg-transparent border-b-2 border-current/20 p-2 text-xs outline-none" value={newItem.currency} onChange={e => setNewItem({...newItem, currency: e.target.value})}>{Object.keys(CURRENCY_RATES).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div></div></div>
-                                            <button onClick={addItem} className={`w-full py-5 rounded-[2rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 font-pop ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40 hover:bg-pink-500' : 'bg-[#1a237e] shadow-[#1a237e]/30 hover:bg-[#0d1642]'}`}>Archive Consignment 蔵</button>
+                                    <div className="modal-scroll-area no-scrollbar">
+                                        <div className="space-y-5 pb-10">
+                                            <div className="space-y-1"><label className="text-[10px] font-black uppercase opacity-60">Blueprint URL</label><div className="flex gap-2 w-full"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none rounded-xl w-full input-full" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={() => fetchMetadata()} className={`px-5 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500' : 'bg-[#1a237e] hover:bg-[#0d1642]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
+                                            <div className="space-y-2"><div className="flex gap-4 border-b border-current/10 pb-1 font-black"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`text-[10px] tracking-widest pb-1 border-b-2 transition-all ${newItem.imageMode === 'url' ? 'border-current' : 'opacity-20 border-transparent'}`}>LINK</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`text-[10px] tracking-widest pb-1 border-b-2 transition-all ${newItem.imageMode === 'upload' ? 'border-current' : 'opacity-20 border-transparent'}`}>UPLOAD</button></div>{newItem.imageMode === 'url' ? <input placeholder="Image URL..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono input-full" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : <div className="border-2 border-dashed border-current/20 rounded-2xl p-4 text-center cursor-pointer bg-white/5" onClick={() => fileInputRef.current.click()}><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => { const r = new FileReader(); r.onloadend = () => setNewItem(p => ({ ...p, image: r.result, imageMode: 'upload' })); r.readAsDataURL(e.target.files[0]); }} /><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase">CHOOSE FILE</p></div>}</div>
+                                            <div className="grid grid-cols-2 gap-4"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Title</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none input-full" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Brand</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none input-full" value={newItem.brand} onChange={e => setNewItem({...newItem, brand: e.target.value})} /></div></div>
+                                            <div className="grid grid-cols-2 gap-4"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Category</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none input-full" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} /></div><div className="grid grid-cols-2 gap-2"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Price</label><input type="number" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono input-full" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">Curr</label><select className="w-full bg-transparent border-b-2 border-current/20 p-2 text-xs outline-none font-mono input-full" value={newItem.currency} onChange={e => setNewItem({...newItem, currency: e.target.value})}>{Object.keys(CURRENCY_RATES).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div></div></div>
+                                            <button onClick={addItem} className={`w-full py-5 rounded-[2rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 font-pop ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40 hover:bg-pink-500' : 'bg-[#1a237e] shadow-[#1a237e]/30'}`}>Archive Consignment 蔵</button>
                                         </div>
                                     </div>
                                 </div>
