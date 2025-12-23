@@ -60,7 +60,7 @@ const App = () => {
   const [activeBrand, setActiveBrand] = useState('全部');
   const [isFetching, setIsFetching] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [lastVisitedId, setLastVisitedId] = useState(null); // 追蹤最後點擊的商品
+  const [lastVisitedId, setLastVisitedId] = useState(null);
   
   const fileInputRef = useRef(null);
   const [newItem, setNewItem] = useState({
@@ -75,6 +75,48 @@ const App = () => {
   const themeColor = isDarkMode ? '#ec4899' : '#1a237e'; 
   const bgMain = isDarkMode ? '#1a1a1a' : '#d7ccc8';
   const bgContainer = isDarkMode ? '#121212' : '#bcaaa4';
+
+  // --- Web App Icon & PWA 強化設定 ---
+  useEffect(() => {
+    // 動態設置 Meta 標籤使 Web App 更像原生 App
+    const metaTags = [
+      { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+      { name: 'apple-mobile-web-app-title', content: 'KURA 蔵' },
+      { name: 'mobile-web-app-capable', content: 'yes' },
+      { name: 'theme-color', content: bgMain }
+    ];
+
+    metaTags.forEach(tag => {
+      let element = document.querySelector(`meta[name="${tag.name}"]`);
+      if (!element) {
+        element = document.createElement('meta');
+        element.setAttribute('name', tag.name);
+        document.head.appendChild(element);
+      }
+      element.setAttribute('content', tag.content);
+    });
+
+    // 設置 Favicon / App Icon (建議你在 GitHub Pages 根目錄放一個 icon.png)
+    let link = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    // 這裡可以使用一個預設的藍色/粉色玫瑰圖標連結，或者指向你專案中的檔案
+    link.href = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='${encodeURIComponent(bgMain)}'/%3E%3Ctext x='50' y='65' font-family='sans-serif' font-size='60' text-anchor='middle' fill='${encodeURIComponent(themeColor)}'%3E蔵%3C/text%3E%3C/svg%3E`;
+
+    // iOS 專用 Apple Touch Icon
+    let appleLink = document.querySelector("link[rel='apple-touch-icon']");
+    if (!appleLink) {
+      appleLink = document.createElement('link');
+      appleLink.rel = 'apple-touch-icon';
+      document.head.appendChild(appleLink);
+    }
+    appleLink.href = link.href;
+
+  }, [isDarkMode, bgMain, themeColor]);
 
   // Firebase Auth
   useEffect(() => {
@@ -103,8 +145,7 @@ const App = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // --- 自動更新邏輯 ---
-  // 當使用者回到 App 視窗時觸發
+  // 自動更新邏輯
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && lastVisitedId && user) {
@@ -112,10 +153,9 @@ const App = () => {
         if (itemToUpdate) {
           syncPrice(itemToUpdate);
         }
-        setLastVisitedId(null); // 更新完畢清除暫存
+        setLastVisitedId(null);
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [lastVisitedId, items, user]);
@@ -149,14 +189,12 @@ const App = () => {
   };
 
   const handleItemLinkClick = (id) => {
-    setLastVisitedId(id); // 記住點擊的商品 ID，以便回來時更新
+    setLastVisitedId(id);
   };
 
-  // 品牌與分類動態列表
   const brandsList = useMemo(() => ["全部", ...new Set(items.map(item => item.brand).filter(Boolean))], [items]);
   const categoriesList = useMemo(() => ["全部", ...new Set(items.map(item => item.category).filter(Boolean))], [items]);
 
-  // 背景花海 (8 朵巨型)
   const bgFlowers = useMemo(() => {
     const flowers = [];
     const positions = [
@@ -240,12 +278,12 @@ const App = () => {
           ))}
         </div>
 
-        {/* 轉角飾條 */}
+        {/* 裝飾角 */}
         <div className="absolute top-0 left-0 w-24 h-24 pointer-events-none opacity-20 mix-blend-screen z-10" style={{ backgroundImage: `url(${getCornerDecor(themeColor)})`, backgroundSize: 'contain' }}></div>
         <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none opacity-20 mix-blend-screen z-10 rotate-90" style={{ backgroundImage: `url(${getCornerDecor(themeColor)})`, backgroundSize: 'contain' }}></div>
 
         {/* 標題與功能列 */}
-        <header className={`sticky top-0 z-50 backdrop-blur-3xl border-b pt-12 pb-8 px-6 transition-all duration-1000 ${isDarkMode ? 'bg-[#1a1a1a]/80 border-pink-900/50 shadow-pink-500/10' : 'bg-[#bcaaa4]/80 border-[#1a237e]/20 shadow-[#1a237e]/10'} shadow-xl`}>
+        <header className={`sticky top-0 z-50 backdrop-blur-3xl border-b pt-12 pb-8 px-6 overflow-hidden transition-all duration-1000 ${isDarkMode ? 'bg-[#1a1a1a]/80 border-pink-900/50 shadow-pink-500/10' : 'bg-[#bcaaa4]/80 border-[#1a237e]/20 shadow-[#1a237e]/10'} shadow-xl`}>
           <div className="flex justify-between items-center relative z-10 font-pop">
             <div>
               <h1 className={`text-4xl font-black italic flex items-baseline gap-2 transition-all duration-1000 ${isDarkMode ? 'drop-shadow-[0_0_15px_#ec4899] text-white' : 'drop-shadow-[0_0_15px_rgba(26,35,126,0.3)] text-[#1a237e]'}`}>
@@ -364,7 +402,7 @@ const App = () => {
           )}
         </main>
 
-        {/* 新增商品頁面 (彈窗) */}
+        {/* 新增商品頁面 */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-12 sm:items-center">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-2xl" onClick={() => setIsModalOpen(false)}></div>
@@ -406,7 +444,7 @@ const App = () => {
                        ) : (
                          <div className="relative group">
                             <input type="text" placeholder="Brand..." className={`w-full bg-transparent border-b-2 p-2 text-sm focus:outline-none ${isDarkMode ? 'text-white' : 'text-[#1a237e]'}`} value={newItem.brand} onChange={(e) => setNewItem({...newItem, brand: e.target.value})} />
-                            <button onClick={() => setShowCustomBrandInput(true)} className="absolute right-0 bottom-2 text-[8px] font-bold opacity-40">+ 手動</button>
+                            <button onClick={() => setShowCustomBrandInput(true)} className="absolute right-0 bottom-2 text-[8px] font-bold opacity-40 hover:opacity-100">+ 手動</button>
                          </div>
                        )}
                     </div>
@@ -442,7 +480,7 @@ const App = () => {
 
                   <div className="pt-2">
                     {newItem.imageMode === 'url' ? (
-                      <input type="text" placeholder="Visual Link..." className={`w-full bg-transparent border-b-2 p-3 text-sm focus:outline-none font-mono ${isDarkMode ? 'text-white border-pink-500/20' : 'text-[#1a237e] border-[#1a237e]/20'}`} value={newItem.image} onChange={(e) => setNewItem({...newItem, image: e.target.value})} />
+                      <input type="text" placeholder="Visual Link..." className={`w-full bg-transparent border-b-2 p-3 text-sm focus:outline-none font-mono placeholder-[#1a237e]/30 ${isDarkMode ? 'border-pink-500/20 focus:border-pink-400' : 'border-[#1a237e]/20 focus:border-[#1a237e]'}`} value={newItem.image} onChange={(e) => setNewItem({...newItem, image: e.target.value})} />
                     ) : (
                       <div className={`border-2 border-dashed rounded-[1.5rem] p-6 text-center cursor-pointer transition-all shadow-inner ${isDarkMode ? 'border-pink-500/30 hover:border-pink-400 bg-pink-500/5' : 'border-[#1a237e]/30 hover:border-[#1a237e] bg-[#1a237e]/5'}`} onClick={() => fileInputRef.current.click()}>
                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
