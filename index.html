@@ -15,7 +15,7 @@
     <!-- 日系 POP 字體 -->
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
     
-    <!-- 核心庫載入 -->
+    <!-- 基礎庫載入 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -43,7 +43,7 @@
 
         body { font-family: 'M PLUS Rounded 1c', sans-serif !important; -webkit-tap-highlight-color: transparent; }
         
-        /* 核心修正：防止 iOS 自動放大 */
+        /* 核心修正：防止 iOS 點擊輸入框自動放大 */
         input, select, textarea, button { font-size: 16px !important; outline: none; }
 
         .safe-pt { padding-top: calc(0.5rem + var(--sat)); }
@@ -52,9 +52,10 @@
         .ellipse-3d { transition: all 0.3s; box-shadow: 0 4px 0 rgba(0,0,0,0.2); }
         .ellipse-3d:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
 
+        /* 背景碎花動畫 */
         @keyframes flower-float {
             0%, 100% { transform: translate(0,0) rotate(0deg) scale(1); }
-            50% { transform: translate(25px, 15px) rotate(180deg) scale(1.1); }
+            50% { transform: translate(25px, 20px) rotate(180deg) scale(1.1); }
         }
         .animate-flower { animation: flower-float 25s ease-in-out infinite; }
         
@@ -66,25 +67,27 @@
         
         .transition-theme { transition: background-color 0.8s, border-color 0.8s, color 0.8s; }
 
-        /* 滿版背景修正 */
+        /* 背景層修正 */
         .bg-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
-        /* 彈窗寬度修正：確保在任何寬度都不被切到 */
-        .modal-body-container {
+        /* 彈窗：確保在任何寬度都不被切到 */
+        .modal-inner-scroll {
             width: 100%;
             max-width: 500px;
             margin: 0 auto;
-            padding: 0 1.25rem 3rem 1.25rem;
+            box-sizing: border-box;
             overflow-x: hidden;
             overflow-y: auto;
             max-height: 78vh;
+            padding: 0 1.25rem 3rem 1.25rem;
         }
 
         .product-card {
             display: flex;
             flex-direction: column;
-            height: 100%;
+            height: auto;
             min-height: 260px;
+            overflow: visible;
         }
     </style>
 </head>
@@ -94,7 +97,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Sarah 的 Firebase 與 API 配置 (已整合) ---
+        // --- Sarah 的 Firebase 與 AI 配置 ---
         const firebaseConfig = {
             apiKey: "AIzaSyD2GJHRM4vTUVrCGhheCK9UoEmvrwDiztU",
             authDomain: "kura-archive.firebaseapp.com",
@@ -117,10 +120,15 @@
 
         const Icon = ({ name, size = 24, className = "" }) => {
             const paths = {
-                plus: "M12 5v14M5 12h14", sun: "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 2v2 M12 20v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M2 12h2 M20 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42 1.42",
-                moon: "M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z", external: "M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6 M11 13l9 -9 M15 4h5v5", 
-                trash: "M4 7h16 M10 11v6 M14 11v6 M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12 M9 7V4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3", close: "M18 6L6 18M6 6l12 12", upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-7 5-5 5 5m-5-5v12",
-                zap: "M13 2 3 14h9l-1 8 10-12h-9l1-8z"
+                plus: "M12 5v14M5 12h14", 
+                sun: "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 2v2 M12 20v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M2 12h2 M20 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42 1.42",
+                moon: "M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z", 
+                external: "M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6 M11 13l9 -9 M15 4h5v5", 
+                trash: "M4 7h16 M10 11v6 M14 11v6 M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12 M9 7V4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3", 
+                close: "M18 6L6 18M6 6l12 12", 
+                upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-7 5-5 5 5m-5-5v12",
+                zap: "M13 2 3 14h9l-1 8 10-12h-9l1-8z",
+                check: "M5 12l5 5L20 7"
             };
             return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={paths[name]} /></svg>;
         };
@@ -136,7 +144,7 @@
                     canvas.width = w; canvas.height = h;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/jpeg', 0.65));
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
                 };
             });
         };
@@ -146,6 +154,7 @@
             const [items, setItems] = useState([]);
             const [loading, setLoading] = useState(true);
             const [isDarkMode, setIsDarkMode] = useState(true);
+            const [isDeleteMode, setIsDeleteMode] = useState(false); // 新增：刪除模式開關
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isFetching, setIsFetching] = useState(false);
             const [isSaving, setIsSaving] = useState(false);
@@ -155,7 +164,7 @@
             const [newItem, setNewItem] = useState({ url: '', title: '', price: '', currency: 'JPY', category: '', brand: '', image: '', imageMode: 'url' });
 
             useEffect(() => {
-                auth.signInAnonymously().then(u => setUser(u.user)).catch(e => console.error(e));
+                auth.signInAnonymously().then(u => setUser(u.user)).catch(console.error);
             }, []);
 
             useEffect(() => {
@@ -171,9 +180,9 @@
             const fetchMetadata = async () => {
                 if (!newItem.url || !sarahGeminiKey) return;
                 setIsFetching(true);
-                setStatus('AI 正在讀取資料與圖片...');
+                setStatus('AI 正在擷取商品資訊...');
                 try {
-                    const prompt = `妳是時尚顧問。請分析網址並以 JSON 回傳: {"title": "名稱", "price": 數字, "currency": "JPY/USD/TWD/EUR/KRW", "image": "主要的商品大圖連結", "brand": "品牌名稱", "category": "種類"}。網址：${newItem.url}`;
+                    const prompt = `妳是時尚專業分析師。請分析網址並以 JSON 回傳: {"title": "商品名", "price": 數字, "currency": "JPY/USD/TWD/EUR/KRW", "image": "主要的商品大圖連結", "brand": "品牌名稱", "category": "種類"}。網址：${newItem.url}`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${sarahGeminiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -186,8 +195,8 @@
                     const data = await res.json();
                     const meta = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
                     setNewItem(prev => ({ ...prev, ...meta, url: newItem.url }));
-                    setStatus('擷取完成！');
-                } catch (e) { setStatus('擷取失敗，請手動填寫。'); }
+                    setStatus('擷取成功！');
+                } catch (e) { setStatus('擷取失敗，請手動輸入。'); }
                 finally { setIsFetching(false); setTimeout(() => setStatus(''), 2000); }
             };
 
@@ -229,7 +238,7 @@
             return (
                 <div className="flex justify-center h-full w-full font-pop transition-colors duration-1000" style={{ backgroundColor: isDarkMode ? '#1a1a1a' : '#d7ccc8' }}>
                     
-                    {/* 背景層 */}
+                    {/* 背景碎花 */}
                     <div className="bg-layer">
                         {[...Array(12)].map((_, i) => (
                             <div key={i} className="absolute animate-flower opacity-[0.2]" style={{ top: `${Math.random()*100}%`, left: `${Math.random()*100}%`, width: Math.random()*80+130, color: themeColor }}>
@@ -238,21 +247,28 @@
                         ))}
                     </div>
 
-                    <div className={`w-full h-full flex flex-col relative z-10 overflow-hidden transition-all ${isDarkMode ? 'bg-[#1a1a1a]/40' : 'bg-[#bcaaa4]/30'}`}>
+                    <div className="w-full h-full flex flex-col relative z-10 overflow-hidden">
                         
                         <header className={`sticky top-0 z-50 backdrop-blur-xl border-b pb-6 px-6 safe-pt shadow-xl ${isDarkMode ? 'bg-[#1a1a1a]/90 border-pink-900/50' : 'bg-[#bcaaa4]/90 border-blue-900/20'}`}>
-                            <div className="flex justify-between items-center max-w-2xl mx-auto w-full">
+                            <div className="flex justify-between items-center">
                                 <div>
                                     <h1 className={`text-4xl font-black italic ${isDarkMode ? 'text-white drop-shadow-[0_0_10px_#ec4899]' : 'text-[#1a237e]'}`}>KURA <span className={isDarkMode ? 'text-pink-400' : 'text-[#303f9f]'}>蔵</span></h1>
                                     <div className={`h-[3px] w-14 mt-2 ${isDarkMode ? 'bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}></div>
                                 </div>
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full border border-current opacity-70 active:scale-90 transition-all">
-                                    {isDarkMode ? <Icon name="sun" size={20} /> : <Icon name="moon" size={20} />}
-                                </button>
+                                <div className="flex gap-3">
+                                    {/* 刪除切換按鈕 */}
+                                    <button onClick={() => setIsDeleteMode(!isDeleteMode)} className={`p-3 rounded-full border active:scale-90 transition-all ${isDeleteMode ? 'bg-red-500 border-red-500 text-white' : 'border-current opacity-70'}`}>
+                                        {isDeleteMode ? <Icon name="check" size={20} /> : <Icon name="trash" size={20} />}
+                                    </button>
+                                    {/* 日夜模式按鈕 */}
+                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full border border-current opacity-70 active:scale-90 transition-all">
+                                        {isDarkMode ? <Icon name="sun" size={20} /> : <Icon name="moon" size={20} />}
+                                    </button>
+                                </div>
                             </div>
                         </header>
 
-                        <nav className="z-40 pt-4 px-6 space-y-3 font-pop max-w-2xl mx-auto w-full">
+                        <nav className="z-40 pt-4 px-6 space-y-3 font-pop">
                             <div className="flex gap-2.5 overflow-x-auto no-scrollbar">
                                 {categoriesList.map(cat => (
                                     <button key={cat} onClick={() => setActiveTab(cat)} className={`ellipse-3d whitespace-nowrap px-5 py-2 text-[10px] font-black uppercase rounded-full border transition-all ${activeTab === cat ? (isDarkMode ? 'bg-pink-600 text-white shadow-lg' : 'bg-[#1a237e] text-white') : 'opacity-40 border-current'}`}>{cat}</button>
@@ -265,21 +281,34 @@
                             </div>
                         </nav>
 
-                        <main className="flex-1 px-5 py-4 z-20 overflow-y-auto no-scrollbar max-w-2xl mx-auto w-full">
-                            {loading ? <div className="text-center py-32 animate-pulse font-black opacity-30 tracking-widest uppercase">Opening...</div> : (
+                        <main className="flex-1 px-5 py-4 z-20 overflow-y-auto no-scrollbar">
+                            {loading ? <div className="text-center py-32 animate-pulse font-black opacity-30 tracking-widest uppercase">Opening Archive...</div> : (
                                 <div className="grid grid-cols-2 gap-4 pb-48">
                                     {filteredItems.map(item => (
                                         <div key={item.id} className={`product-card p-3 rounded-[2.2rem] border transition-all duration-500 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white/60 border-[#1a237e]/10'} hover:shadow-2xl shadow-sm`}>
-                                            <a href={item.url} target="_blank" className="aspect-[4/5] rounded-[1.8rem] overflow-hidden mb-3 relative bg-black shadow-inner block">
-                                                <img src={item.image} className="w-full h-full object-cover" alt="" />
-                                                <button onClick={(e) => { e.preventDefault(); if(confirm("移除這件珍藏？")) wishlistRef.doc(item.id).delete(); }} className="absolute top-2 right-2 p-2.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 shadow-lg">✕</button>
+                                            <div className="aspect-[4/5] rounded-[1.8rem] overflow-hidden mb-3 relative bg-black shadow-inner">
+                                                <a href={item.url} target="_blank" className="block w-full h-full" onClick={(e) => isDeleteMode && e.preventDefault()}>
+                                                    {/* 圖片原色呈現 */}
+                                                    <img src={item.image} className="w-full h-full object-cover" alt="" />
+                                                </a>
+                                                
+                                                {/* 刪除按鈕：僅在刪除模式下顯示 */}
+                                                {isDeleteMode && (
+                                                    <button 
+                                                        onClick={() => { if(confirm("移除這件珍藏？")) wishlistRef.doc(item.id).delete(); }} 
+                                                        className="absolute top-2 right-2 p-2.5 bg-red-600 text-white rounded-full shadow-2xl active:scale-95 transition-all z-30"
+                                                    >
+                                                        <Icon name="close" size={16} />
+                                                    </button>
+                                                )}
+
                                                 <div className={`absolute bottom-3 left-3 px-3 py-1 text-[9px] font-black text-white rounded-lg shadow-xl ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}>{item.brand}</div>
-                                            </a>
-                                            <h3 className="text-[12px] font-black line-clamp-2 leading-tight mb-2 h-8 overflow-hidden">{item.title}</h3>
+                                            </div>
+                                            <h3 className="text-[12px] font-black line-clamp-2 leading-tight mb-2 h-8">{item.title}</h3>
                                             <div className="mt-auto flex justify-between items-end border-t border-current/10 pt-3 pb-1">
-                                                <div className="flex flex-col">
+                                                <div>
                                                     <div className={`text-sm font-black ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>{item.currency} {item.price}</div>
-                                                    <div className="text-[9px] opacity-40 font-bold italic">≈ ${Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))}</div>
+                                                    <div className="text-[9px] opacity-40 font-bold italic">≈ ${Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))} TWD</div>
                                                 </div>
                                                 <a href={item.url} target="_blank" className="p-3 rounded-2xl bg-current/10 hover:bg-current/20 active:scale-90 transition-all shadow-sm"><Icon name="external" size={16} /></a>
                                             </div>
@@ -290,19 +319,19 @@
                         </main>
 
                         <div className="fixed bottom-0 right-0 p-8 z-[60] safe-pb">
-                            <button onClick={() => setIsModalOpen(true)} className={`group relative p-6 rounded-full bg-black text-white shadow-2xl active:scale-90 border-2 ${isDarkMode ? 'border-pink-500 shadow-pink-500/20' : 'border-[#1a237e]'}`}>
+                            <button onClick={() => setIsModalOpen(true)} className={`group relative p-6 rounded-full bg-black text-white shadow-2xl active:scale-90 border-2 ${isDarkMode ? 'border-pink-500' : 'border-[#1a237e]'}`}>
                                 <div className={`absolute inset-0 opacity-0 group-hover:opacity-40 transition-opacity ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}></div>
                                 <div className="absolute inset-0 animate-spin-slow opacity-20 scale-150 pointer-events-none"><svg viewBox="0 0 24 24" fill="currentColor" className={isDarkMode ? 'text-pink-400' : 'text-[#3f51b5]'}><circle cx="12" cy="12" r="5"/></svg></div>
                                 <Icon name="plus" size={32} />
                             </button>
                         </div>
                         
-                        <footer className="pt-24 pb-48 text-center opacity-30 text-[10px] uppercase font-black tracking-[0.5em] safe-pb px-10 max-w-2xl mx-auto w-full">
+                        <footer className="pt-24 pb-48 text-center opacity-30 text-[10px] uppercase font-black tracking-[0.5em] safe-pb px-10">
                             Designed by Sarah • 2025
                         </footer>
 
                         {isModalOpen && (
-                            <div className="fixed inset-0 z-[100] flex items-end justify-center">
+                            <div className="fixed inset-0 z-[100] flex items-end justify-center font-pop">
                                 <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
                                 <div className={`relative w-full max-w-[500px] rounded-t-[3.5rem] border-t-2 modal-enter safe-pb transition-all duration-500 overflow-hidden ${isDarkMode ? 'bg-[#222222] border-pink-900/50 text-white' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
                                     <div className={`h-2 w-16 absolute top-4 left-1/2 -translate-x-1/2 rounded-full opacity-20 ${isDarkMode ? 'bg-white' : 'bg-[#1a237e]'}`}></div>
@@ -311,14 +340,14 @@
                                         <button onClick={() => setIsModalOpen(false)} className="p-2 opacity-50 text-2xl font-pop">✕</button>
                                     </div>
                                     
-                                    <div className="modal-body-container no-scrollbar">
+                                    <div className="modal-inner-scroll no-scrollbar">
                                         <div className="space-y-6">
                                             {status && <div className="bg-pink-500/20 text-pink-400 text-[10px] font-black p-3 rounded-xl text-center border border-pink-500/30 animate-pulse">{status}</div>}
 
                                             <div className="space-y-1"><label className="text-[10px] font-black uppercase opacity-60 tracking-widest">網址擷取 (AI)</label><div className="flex gap-2 w-full"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none rounded-xl" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={fetchMetadata} disabled={isFetching} className={`px-5 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
                                             
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase opacity-60">商品圖片</label>
+                                                <label className="text-[10px] font-black uppercase opacity-60 tracking-widest">商品圖片</label>
                                                 {newItem.image ? (
                                                     <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden border-2 border-current/10 bg-black/10">
                                                         <img src={newItem.image} className="w-full h-full object-contain" alt="" />
@@ -326,9 +355,9 @@
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-4">
-                                                        <div className="flex gap-4 border-b border-current/10 pb-1 font-black text-[10px]"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`${newItem.imageMode === 'url' ? 'border-b-2 border-current' : 'opacity-40'}`}>連結</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`${newItem.imageMode === 'upload' ? 'border-b-2 border-current' : 'opacity-40'}`}>上傳</button></div>
-                                                        {newItem.imageMode === 'url' ? <input placeholder="貼上網址..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : 
-                                                        <div className="border-2 border-dashed border-current/20 rounded-2xl p-4 text-center cursor-pointer bg-white/5 active:bg-white/10" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=handleFileUpload; i.click(); }}><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase tracking-widest">點擊上傳或拍照</p></div>}
+                                                        <div className="flex gap-4 border-b border-current/10 pb-1 font-black text-[10px]"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`${newItem.imageMode === 'url' ? 'border-b-2 border-current' : 'opacity-40'}`}>網址連結</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`${newItem.imageMode === 'upload' ? 'border-b-2 border-current' : 'opacity-40'}`}>相簿上傳</button></div>
+                                                        {newItem.imageMode === 'url' ? <input placeholder="貼上商品圖片網址..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : 
+                                                        <div className="border-2 border-dashed border-current/20 rounded-2xl p-6 text-center cursor-pointer bg-white/5 active:bg-white/10" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=async(e)=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload=async(ev)=>{ const c=await compressImage(ev.target.result); setNewItem(p=>({...p, image:c})); }; r.readAsDataURL(f); }; i.click(); }}><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase tracking-widest">點擊選取或拍照</p></div>}
                                                     </div>
                                                 )}
                                             </div>
