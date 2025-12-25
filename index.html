@@ -29,7 +29,6 @@
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
         
-        /* 隱藏滾動條且防止溢出 */
         * { -ms-overflow-style: none; scrollbar-width: none; box-sizing: border-box; }
         *::-webkit-scrollbar { display: none; }
 
@@ -44,39 +43,36 @@
 
         body { font-family: 'M PLUS Rounded 1c', sans-serif !important; -webkit-tap-highlight-color: transparent; }
         
-        /* 核心修正：防止 iOS 自動放大 */
         input, select, textarea, button { font-size: 16px !important; outline: none; }
 
         .safe-pt { padding-top: calc(0.5rem + var(--sat)); }
-        .safe-pb { padding-bottom: calc(1rem + var(--sab)); }
+        .safe-pb { padding-bottom: calc(0.2rem + var(--sab)); }
 
-        .ellipse-3d { transition: all 0.3s; box-shadow: 0 4px 0 rgba(0,0,0,0.2); }
-        .ellipse-3d:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
+        .ellipse-3d { transition: all 0.2s; box-shadow: 0 3px 0 rgba(0,0,0,0.15); }
+        .ellipse-3d:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.1); }
 
-        /* 背景碎花動畫 */
         @keyframes flower-float {
             0%, 100% { transform: translate(0,0) rotate(0deg) scale(1); }
-            50% { transform: translate(25px, 15px) rotate(180deg) scale(1.1); }
+            50% { transform: translate(20px, 15px) rotate(180deg) scale(1.1); }
         }
-        .animate-flower { animation: flower-float 22s ease-in-out infinite; }
+        .animate-flower { animation: flower-float 25s ease-in-out infinite; }
         
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin-slow 40s linear infinite; }
+        .animate-spin-slow { animation: spin-slow 45s linear infinite; }
 
         .modal-enter { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         
         .transition-theme { transition: background-color 0.8s, border-color 0.8s, color 0.8s; }
 
-        /* 滿版背景層 */
         .bg-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
-        /* 商品卡片尺寸微調：確保 1 畫面可完整顯示 4 張卡片 */
+        /* 商品卡片：極致縮減多餘空間，確保一屏 4 卡 */
         .product-card {
             display: flex;
             flex-direction: column;
             height: auto;
-            min-height: 220px;
+            min-height: 200px;
             overflow: visible;
         }
 
@@ -87,8 +83,8 @@
             box-sizing: border-box;
             overflow-x: hidden;
             overflow-y: auto;
-            max-height: 80vh;
-            padding: 0 1.25rem 4rem 1.25rem;
+            max-height: 82vh;
+            padding: 0 1.25rem 3rem 1.25rem;
         }
     </style>
 </head>
@@ -115,21 +111,15 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = "kura-archive";
-        
-        // 遵守路徑規則 1
-        const getWishlistRef = () => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('wishlist');
+        const wishlistRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('wishlist');
 
         const CURRENCY_RATES = { 'JPY': 0.21, 'USD': 32.5, 'KRW': 0.024, 'EUR': 35.2, 'TWD': 1 };
 
         const Icon = ({ name, size = 24, className = "" }) => {
             const paths = {
                 plus: "M12 5v14M5 12h14", sun: "M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 2v2 M12 20v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M2 12h2 M20 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42 1.42",
-                moon: "M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z", 
-                trash: "M4 7h16 M10 11v6 M14 11v6 M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12 M9 7V4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3", 
-                external: "M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6 M11 13l9 -9 M15 4h5v5", 
-                close: "M18 6L6 18M6 6l12 12", 
-                upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-7 5-5 5 5m-5-5v12",
-                check: "M5 12l5 5L20 7"
+                moon: "M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z", trash: "M4 7h16 M10 11v6 M14 11v6 M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12 M9 7V4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3", 
+                external: "M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6 M11 13l9 -9 M15 4h5v5", close: "M18 6L6 18M6 6l12 12", upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-7 5-5 5 5m-5-5v12", check: "M5 12l5 5L20 7"
             };
             return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={paths[name]} /></svg>;
         };
@@ -170,7 +160,7 @@
 
             useEffect(() => {
                 if (!user) return;
-                const unsub = getWishlistRef().onSnapshot(snap => {
+                const unsub = wishlistRef.onSnapshot(snap => {
                     const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setItems(data.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
                     setLoading(false);
@@ -181,9 +171,9 @@
             const fetchMetadata = async () => {
                 if (!newItem.url || !sarahGeminiKey) return;
                 setIsFetching(true);
-                setStatus('AI 分析中...');
+                setStatus('AI 擷取中...');
                 try {
-                    const prompt = `妳是時尚顧問。請分析網址並以 JSON 回傳: {"title": "商品名", "price": 數字, "currency": "JPY/USD/TWD/EUR/KRW", "image": "主要大圖網址", "brand": "品牌名稱", "category": "種類"}。網址：${newItem.url}`;
+                    const prompt = `妳是時尚專家。請分析網址並以 JSON 回傳: {"title": "名稱", "price": 數字, "currency": "JPY/USD/TWD/EUR/KRW", "image": "商品大圖網址", "brand": "品牌", "category": "種類"}。網址：${newItem.url}`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${sarahGeminiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -196,7 +186,7 @@
                     const data = await res.json();
                     const meta = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
                     setNewItem(prev => ({ ...prev, ...meta, url: newItem.url }));
-                    setStatus('擷取成功！');
+                    setStatus('擷取完成！');
                 } catch (e) { setStatus('擷取失敗'); }
                 finally { setIsFetching(false); setTimeout(() => setStatus(''), 2000); }
             };
@@ -204,7 +194,7 @@
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                setStatus('優化圖片中...');
+                setStatus('壓縮中...');
                 const reader = new FileReader();
                 reader.onload = async (ev) => {
                     const compressed = await compressImage(ev.target.result);
@@ -217,9 +207,9 @@
             const addItem = async () => {
                 if (!newItem.title || !user || isSaving) return;
                 setIsSaving(true);
-                setStatus('正在存入珍藏庫...');
+                setStatus('儲存中...');
                 try {
-                    await getWishlistRef().add({
+                    await wishlistRef.add({
                         ...newItem,
                         uid: user.uid,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -234,18 +224,15 @@
             const categoriesList = useMemo(() => ["全部", ...new Set(items.map(i => i.category).filter(Boolean))], [items]);
             const filteredItems = items.filter(i => (activeTab === '全部' || i.category === activeTab) && (activeBrand === '全部' || i.brand === activeBrand));
 
-            // 文字顏色切換邏輯 (夜間模式使用淺灰色)
             const themeColor = isDarkMode ? '#ec4899' : '#1a237e';
             const textColorClass = isDarkMode ? 'text-[#D1D5DB]' : 'text-[#1a237e]';
-            const subTextColorClass = isDarkMode ? 'text-gray-400' : 'text-[#1a237e]/60';
 
             return (
                 <div className={`flex justify-center h-full w-full font-pop transition-colors duration-1000 ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-[#d7ccc8]'}`}>
                     
-                    {/* 背景層 */}
                     <div className="bg-layer">
-                        {[...Array(12)].map((_, i) => (
-                            <div key={i} className="absolute animate-flower opacity-[0.2]" style={{ top: `${Math.random()*100}%`, left: `${Math.random()*100}%`, width: Math.random()*80+130, color: themeColor }}>
+                        {[...Array(10)].map((_, i) => (
+                            <div key={i} className="absolute animate-flower opacity-[0.15]" style={{ top: `${Math.random()*100}%`, left: `${Math.random()*100}%`, width: Math.random()*80+130, color: themeColor }}>
                                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C12 22 20 18 20 12C20 6 12 2 12 2C12 2 4 6 4 12C4 18 12 22 12 22Z" opacity="0.3"/><circle cx="12" cy="12" r="5"/></svg>
                             </div>
                         ))}
@@ -253,57 +240,59 @@
 
                     <div className="w-full h-full flex flex-col relative z-10 overflow-hidden">
                         
-                        <header className={`sticky top-0 z-50 backdrop-blur-xl border-b pb-4 px-6 safe-pt shadow-xl transition-all ${isDarkMode ? 'bg-[#1a1a1a]/90 border-pink-900/50' : 'bg-[#bcaaa4]/90 border-blue-900/20'}`}>
+                        <header className={`sticky top-0 z-50 backdrop-blur-xl border-b pb-3 px-6 safe-pt shadow-md transition-all ${isDarkMode ? 'bg-[#1a1a1a]/90 border-pink-900/40' : 'bg-[#bcaaa4]/90 border-blue-900/10'}`}>
                             <div className="flex justify-between items-center w-full">
                                 <div>
-                                    <h1 className={`text-4xl font-black italic ${isDarkMode ? 'text-white drop-shadow-[0_0_10px_#ec4899]' : 'text-[#1a237e]'}`}>KURA <span className={isDarkMode ? 'text-pink-400' : 'text-[#303f9f]'}>蔵</span></h1>
-                                    <div className={`h-[3px] w-14 mt-1 ${isDarkMode ? 'bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}></div>
+                                    <h1 className={`text-3xl font-black italic ${isDarkMode ? 'text-white drop-shadow-[0_0_8px_#ec4899]' : 'text-[#1a237e]'}`}>KURA <span className={isDarkMode ? 'text-pink-400' : 'text-[#303f9f]'}>蔵</span></h1>
+                                    <div className={`h-[2px] w-12 mt-1 ${isDarkMode ? 'bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}></div>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setIsDeleteMode(!isDeleteMode)} className={`p-2.5 rounded-full border active:scale-90 transition-all ${isDeleteMode ? 'bg-red-500 border-red-500 text-white shadow-lg' : 'border-current opacity-70'} ${textColorClass}`}>
-                                        {isDeleteMode ? <Icon name="check" size={18} /> : <Icon name="trash" size={18} />}
+                                <div className="flex gap-1.5">
+                                    <button onClick={() => setIsDeleteMode(!isDeleteMode)} className={`p-2 rounded-full border active:scale-90 transition-all ${isDeleteMode ? 'bg-red-500 border-red-500 text-white shadow-lg' : 'border-current opacity-60'} ${textColorClass}`}>
+                                        {isDeleteMode ? <Icon name="check" size={16} /> : <Icon name="trash" size={16} />}
                                     </button>
-                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2.5 rounded-full border border-current opacity-70 active:scale-90 transition-all ${textColorClass}`}>
-                                        {isDarkMode ? <Icon name="sun" size={18} /> : <Icon name="moon" size={18} />}
+                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full border border-current opacity-60 active:scale-90 transition-all ${textColorClass}`}>
+                                        {isDarkMode ? <Icon name="sun" size={16} /> : <Icon name="moon" size={16} />}
                                     </button>
                                 </div>
                             </div>
                         </header>
 
-                        <nav className="z-40 pt-3 px-6 space-y-2 font-pop w-full">
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                        <nav className="z-40 pt-2 px-6 space-y-1 font-pop w-full">
+                            <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1">
                                 {categoriesList.map(cat => (
-                                    <button key={cat} onClick={() => setActiveTab(cat)} className={`ellipse-3d whitespace-nowrap px-4 py-1.5 text-[9px] font-black uppercase rounded-full border transition-all ${activeTab === cat ? (isDarkMode ? 'bg-pink-600 text-white shadow-lg' : 'bg-[#1a237e] text-white') : 'opacity-40 border-current'} ${textColorClass}`}>{cat}</button>
+                                    <button key={cat} onClick={() => setActiveTab(cat)} className={`ellipse-3d whitespace-nowrap px-3 py-1 text-[8px] font-black uppercase rounded-full border transition-all ${activeTab === cat ? (isDarkMode ? 'bg-pink-600 text-white border-pink-400 shadow-md' : 'bg-[#1a237e] text-white') : 'opacity-40 border-current'} ${textColorClass}`}>{cat}</button>
                                 ))}
                             </div>
-                            <div className={`flex gap-5 border-y border-current/10 py-2.5 overflow-x-auto no-scrollbar font-black text-[10px] uppercase ${textColorClass}`}>
+                            <div className={`flex gap-4 border-y border-current/10 py-1.5 overflow-x-auto no-scrollbar font-black text-[9px] uppercase ${textColorClass}`}>
                                 {brandsList.map(brand => (
                                     <button key={brand} onClick={() => setActiveBrand(brand)} className={`whitespace-nowrap transition-all ${activeBrand === brand ? 'scale-110 opacity-100' : 'opacity-30'}`}>{brand}</button>
                                 ))}
                             </div>
                         </nav>
 
-                        <main className="flex-1 px-4 py-2 z-20 overflow-y-auto no-scrollbar w-full">
-                            {loading ? <div className={`text-center py-32 animate-pulse font-black opacity-30 tracking-widest uppercase ${textColorClass}`}>Opening Archive...</div> : (
-                                <div className="grid grid-cols-2 gap-3 pb-40">
+                        <main className="flex-1 px-4 py-1 z-20 overflow-y-auto no-scrollbar w-full">
+                            {loading ? <div className={`text-center py-20 animate-pulse font-black opacity-20 tracking-widest uppercase ${textColorClass}`}>Archive...</div> : (
+                                <div className="grid grid-cols-2 gap-3 pb-32">
                                     {filteredItems.map(item => (
-                                        <div key={item.id} className={`product-card p-2 rounded-[1.8rem] border transition-all duration-500 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white/60 border-[#1a237e]/10'} hover:shadow-xl`}>
-                                            <div className="aspect-[4/5] rounded-[1.4rem] overflow-hidden mb-2 relative bg-black shadow-inner">
+                                        <div key={item.id} className={`product-card p-2 rounded-[1.6rem] border transition-all duration-500 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white/60 border-[#1a237e]/10'} hover:shadow-xl`}>
+                                            <div className="aspect-[4/5] rounded-[1.2rem] overflow-hidden mb-1.5 relative bg-black shadow-inner">
                                                 <a href={item.url} target="_blank" className="block w-full h-full" onClick={(e) => isDeleteMode && e.preventDefault()}>
                                                     <img src={item.image} className="w-full h-full object-cover" alt="" />
                                                 </a>
                                                 {isDeleteMode && (
-                                                    <button onClick={() => { if(confirm("移除這件珍藏？")) wishlistRef.doc(item.id).delete(); }} className="absolute top-1.5 right-1.5 p-2 bg-red-600 text-white rounded-full shadow-lg active:scale-95 transition-all z-30"><Icon name="close" size={14} /></button>
+                                                    <button onClick={() => { if(confirm("移除收藏？")) wishlistRef.doc(item.id).delete(); }} className="absolute top-1 right-1 p-1.5 bg-red-600 text-white rounded-full shadow-lg active:scale-95 z-30"><Icon name="close" size={12} /></button>
                                                 )}
-                                                <div className={`absolute bottom-2 left-2 px-2 py-0.5 text-[7px] font-black text-white rounded-md shadow-lg ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}>{item.brand}</div>
+                                                <div className={`absolute bottom-1.5 left-1.5 px-2 py-0.5 text-[6.5px] font-black text-white rounded shadow-md ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}>{item.brand}</div>
                                             </div>
-                                            <h3 className={`text-[10px] font-black line-clamp-2 leading-tight mb-1 h-7 overflow-hidden ${textColorClass}`}>{item.title}</h3>
-                                            <div className="mt-auto flex justify-between items-end border-t border-current/5 pt-1.5 pb-0.5">
-                                                <div>
-                                                    <div className={`text-[11px] font-black ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>{item.currency} {item.price}</div>
-                                                    <div className={`text-[7px] opacity-40 italic ${textColorClass}`}>≈ TWD ${Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))}</div>
+                                            <h3 className={`text-[9px] font-black line-clamp-2 leading-tight mb-1 h-6 overflow-hidden ${textColorClass}`}>{item.title}</h3>
+                                            
+                                            {/* 價格區域佈局重新設計：放大匯率換算價格 */}
+                                            <div className="mt-auto flex justify-between items-center border-t border-current/5 pt-1.5 pb-0.5">
+                                                <div className="flex flex-col">
+                                                    <div className={`text-[8px] font-black opacity-50 uppercase tracking-tighter ${textColorClass}`}>{item.currency} {item.price}</div>
+                                                    <div className={`text-[12px] font-black leading-tight ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>$ {Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))} <span className="text-[7px] font-bold">TWD</span></div>
                                                 </div>
-                                                <a href={item.url} target="_blank" className={`p-2 rounded-xl bg-current/5 hover:bg-current/10 active:scale-90 transition-all ${textColorClass}`}><Icon name="external" size={12} /></a>
+                                                <a href={item.url} target="_blank" className={`p-1.5 rounded-lg bg-current/5 hover:bg-current/10 active:scale-90 transition-all ${textColorClass}`}><Icon name="external" size={12} /></a>
                                             </div>
                                         </div>
                                     ))}
@@ -311,34 +300,32 @@
                             )}
                         </main>
 
-                        <div className="fixed bottom-0 right-0 p-6 z-[60] safe-pb">
-                            <button onClick={() => setIsModalOpen(true)} className={`group relative p-5 rounded-full bg-black text-white shadow-2xl active:scale-90 border-2 ${isDarkMode ? 'border-pink-500 shadow-pink-500/30' : 'border-[#1a237e]'}`}>
+                        <div className="fixed bottom-0 right-0 p-5 z-[60] safe-pb">
+                            <button onClick={() => setIsModalOpen(true)} className={`group relative p-4 rounded-full bg-black text-white shadow-2xl active:scale-90 border-2 ${isDarkMode ? 'border-pink-500 shadow-pink-500/30' : 'border-[#1a237e]'}`}>
                                 <div className={`absolute inset-0 animate-spin-slow opacity-20 pointer-events-none ${isDarkMode ? 'text-pink-400' : 'text-blue-200'}`}><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg></div>
-                                <Icon name="plus" size={28} />
+                                <Icon name="plus" size={24} />
                             </button>
                         </div>
                         
-                        <footer className={`flex flex-col items-center pb-12 pt-8 opacity-40 font-black tracking-[0.4em] uppercase text-[9px] safe-pb transition-all ${textColorClass}`}>
-                            <div className="mb-2 h-[1px] w-12 bg-current opacity-20"></div>
+                        <footer className={`flex flex-col items-center pb-8 pt-4 opacity-30 font-black tracking-[0.3em] uppercase text-[8px] safe-pb transition-all ${textColorClass}`}>
                             Designed by Sarah • 2025
                         </footer>
 
-                        {/* 新增商品 Modal */}
                         {isModalOpen && (
                             <div className="fixed inset-0 z-[100] flex items-end justify-center">
                                 <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
-                                <div className={`relative w-full rounded-t-[3rem] border-t-2 modal-enter safe-pb transition-all duration-500 overflow-hidden ${isDarkMode ? 'bg-[#222222] border-pink-900/50 text-[#D1D5DB]' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
+                                <div className={`relative w-full rounded-t-[2.5rem] border-t-2 modal-enter safe-pb transition-all duration-500 overflow-hidden ${isDarkMode ? 'bg-[#222222] border-pink-900/50 text-[#D1D5DB]' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
                                     <div className={`h-2 w-16 absolute top-4 left-1/2 -translate-x-1/2 rounded-full opacity-20 ${isDarkMode ? 'bg-white' : 'bg-[#1a237e]'}`}></div>
                                     <div className="flex justify-between items-center px-8 mb-4 mt-6">
-                                        <h2 className="text-2xl font-black italic uppercase flex items-center gap-3">Vault Entry <Icon name="zap" className="animate-bounce" /></h2>
+                                        <h2 className="text-xl font-black italic uppercase flex items-center gap-3">Vault Entry <Icon name="zap" className="animate-bounce" /></h2>
                                         <button onClick={() => setIsModalOpen(false)} className="p-2 opacity-50 text-2xl font-pop">✕</button>
                                     </div>
                                     
-                                    <div className="modal-inner-scroll no-scrollbar">
+                                    <div className="modal-inner-scroll no-scrollbar font-pop">
                                         <div className="space-y-5">
                                             {status && <div className="bg-pink-500/20 text-pink-400 text-[10px] font-black p-3 rounded-xl text-center border border-pink-500/30 animate-pulse">{status}</div>}
 
-                                            <div className="space-y-1"><label className="text-[10px] font-black uppercase opacity-60 tracking-widest">網址擷取 (AI)</label><div className="flex gap-2 w-full"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none rounded-xl" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={fetchMetadata} disabled={isFetching} className={`px-5 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
+                                            <div className="space-y-1"><label className="text-[10px] font-black uppercase opacity-60">網址擷取 (AI)</label><div className="flex gap-2 w-full"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none rounded-xl" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={fetchMetadata} disabled={isFetching} className={`px-5 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
                                             
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase opacity-60">商品圖片</label>
@@ -349,9 +336,9 @@
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-4">
-                                                        <div className="flex gap-4 border-b border-current/10 pb-1 font-black text-[10px]"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`${newItem.imageMode === 'url' ? 'border-b-2 border-current' : 'opacity-40'}`}>連結模式</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`${newItem.imageMode === 'upload' ? 'border-b-2 border-current' : 'opacity-40'}`}>相簿上傳</button></div>
+                                                        <div className="flex gap-4 border-b border-current/10 pb-1 font-black text-[10px]"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`${newItem.imageMode === 'url' ? 'border-b-2 border-current' : 'opacity-40'}`}>網址連結</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`${newItem.imageMode === 'upload' ? 'border-b-2 border-current' : 'opacity-40'}`}>相簿上傳</button></div>
                                                         {newItem.imageMode === 'url' ? <input placeholder="貼上商品圖片網址..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : 
-                                                        <div className="border-2 border-dashed border-current/20 rounded-2xl p-4 text-center cursor-pointer bg-white/5 active:bg-white/10" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=async(e)=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload=async(ev)=>{ const c=await compressImage(ev.target.result); setNewItem(p=>({...p, image:c})); }; r.readAsDataURL(f); }; i.click(); }}><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase tracking-widest">點擊上傳或拍照</p></div>}
+                                                        <div className="border-2 border-dashed border-current/20 rounded-2xl p-4 text-center cursor-pointer bg-white/5 active:bg-white/10" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=async(e)=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload=async(ev)=>{ const c=await compressImage(ev.target.result); setNewItem(p=>({...p, image:c})); }; r.readAsDataURL(f); }; i.click(); }}><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase tracking-widest">點擊選取或拍照</p></div>}
                                                     </div>
                                                 )}
                                             </div>
@@ -366,7 +353,7 @@
                                                 <div className="grid grid-cols-2 gap-2"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">價格</label><input type="number" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono font-black" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">幣別</label><select className="w-full bg-transparent border-b-2 border-current/20 p-2 text-xs outline-none font-mono font-black" value={newItem.currency} onChange={e => setNewItem({...newItem, currency: e.target.value})}>{Object.keys(CURRENCY_RATES).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div></div>
                                             </div>
                                             
-                                            <button onClick={addItem} disabled={isSaving || isFetching} className={`w-full py-5 rounded-[2rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 font-pop ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40 hover:bg-pink-500' : 'bg-[#1a237e] shadow-[#1a237e]/30'}`}>{isSaving ? 'Processing...' : 'Archive Consignment 蔵'}</button>
+                                            <button onClick={addItem} disabled={isSaving || isFetching} className={`w-full py-5 rounded-[2rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40 hover:bg-pink-500' : 'bg-[#1a237e] shadow-[#1a237e]/30'}`}>{isSaving ? 'Processing...' : 'Archive Consignment 蔵'}</button>
                                         </div>
                                     </div>
                                 </div>
