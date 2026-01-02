@@ -53,7 +53,7 @@
 
         @keyframes flower-float {
             0%, 100% { transform: translate(0,0) rotate(0deg) scale(1); }
-            50% { transform: translate(20px, 15px) rotate(180deg) scale(1.1); }
+            50% { transform: translate(25px, 15px) rotate(180deg) scale(1.1); }
         }
         .animate-flower { animation: flower-float 25s ease-in-out infinite; }
         
@@ -67,7 +67,6 @@
 
         .bg-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
-        /* 商品卡片：極致縮減多餘空間，確保一屏 4 卡 */
         .product-card {
             display: flex;
             flex-direction: column;
@@ -94,7 +93,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Sarah 的 Firebase 與 AI 配置 ---
+        // --- Sarah 的 Firebase 與 API 配置 ---
         const firebaseConfig = {
             apiKey: "AIzaSyD2GJHRM4vTUVrCGhheCK9UoEmvrwDiztU",
             authDomain: "kura-archive.firebaseapp.com",
@@ -148,8 +147,10 @@
             const [isDeleteMode, setIsDeleteMode] = useState(false);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isFetching, setIsFetching] = useState(false);
+            const [isUpdating, setIsUpdating] = useState(false); // 新增：後台同步狀態
             const [isSaving, setIsSaving] = useState(false);
             const [status, setStatus] = useState('');
+            const [lastVisitedId, setLastVisitedId] = useState(null); // 追蹤最後點擊的商品
             const [activeTab, setActiveTab] = useState('全部');
             const [activeBrand, setActiveBrand] = useState('全部');
             const [newItem, setNewItem] = useState({ url: '', title: '', price: '', currency: 'JPY', category: '', brand: '', image: '', imageMode: 'url' });
@@ -168,12 +169,44 @@
                 return () => unsub();
             }, [user]);
 
+            // --- 核心修復：當回到 App 時自動檢查價格同步 ---
+            useEffect(() => {
+                const handleVisibilityChange = () => {
+                    if (document.visibilityState === 'visible' && lastVisitedId) {
+                        const itemToSync = items.find(i => i.id === lastVisitedId);
+                        if (itemToSync) {
+                            syncItemPrice(itemToSync.url, itemToSync.id);
+                        }
+                        setLastVisitedId(null); // 同步完畢清空追蹤
+                    }
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+            }, [lastVisitedId, items]);
+
+            const syncItemPrice = async (url, id) => {
+                setIsUpdating(true);
+                try {
+                    const prompt = `妳是價格監測員。請快速讀取此網址並僅以 JSON 回傳目前最新的價格與幣別: {"price": 數字, "currency": "JPY/USD/TWD/EUR/KRW"}。網址：${url}`;
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${sarahGeminiKey}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], tools: [{ "google_search": {} }], generationConfig: { responseMimeType: "application/json" } })
+                    });
+                    const data = await res.json();
+                    const meta = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+                    if (meta.price) {
+                        await wishlistRef.doc(id).update({ price: meta.price, currency: meta.currency });
+                    }
+                } catch (e) { console.error("Sync error", e); }
+                finally { setIsUpdating(false); }
+            };
+
             const fetchMetadata = async () => {
                 if (!newItem.url || !sarahGeminiKey) return;
                 setIsFetching(true);
-                setStatus('AI 擷取中...');
+                setStatus('AI 分析中...');
                 try {
-                    const prompt = `妳是時尚專家。請分析網址並以 JSON 回傳: {"title": "名稱", "price": 數字, "currency": "JPY/USD/TWD/EUR/KRW", "image": "商品大圖網址", "brand": "品牌", "category": "種類"}。網址：${newItem.url}`;
+                    const prompt = `妳是時尚顧問。請分析網址並以 JSON 回傳: {"title": "名稱", "price": 數字, "currency": "JPY/USD/TWD/EUR/KRW", "image": "主要大圖網址", "brand": "品牌名稱", "category": "種類"}。網址：${newItem.url}`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${sarahGeminiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -186,7 +219,7 @@
                     const data = await res.json();
                     const meta = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
                     setNewItem(prev => ({ ...prev, ...meta, url: newItem.url }));
-                    setStatus('擷取完成！');
+                    setStatus('擷取成功！');
                 } catch (e) { setStatus('擷取失敗'); }
                 finally { setIsFetching(false); setTimeout(() => setStatus(''), 2000); }
             };
@@ -194,7 +227,7 @@
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                setStatus('壓縮中...');
+                setStatus('優化中...');
                 const reader = new FileReader();
                 reader.onload = async (ev) => {
                     const compressed = await compressImage(ev.target.result);
@@ -207,7 +240,7 @@
             const addItem = async () => {
                 if (!newItem.title || !user || isSaving) return;
                 setIsSaving(true);
-                setStatus('儲存中...');
+                setStatus('存檔中...');
                 try {
                     await wishlistRef.add({
                         ...newItem,
@@ -231,7 +264,7 @@
                 <div className={`flex justify-center h-full w-full font-pop transition-colors duration-1000 ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-[#d7ccc8]'}`}>
                     
                     <div className="bg-layer">
-                        {[...Array(10)].map((_, i) => (
+                        {[...Array(12)].map((_, i) => (
                             <div key={i} className="absolute animate-flower opacity-[0.15]" style={{ top: `${Math.random()*100}%`, left: `${Math.random()*100}%`, width: Math.random()*80+130, color: themeColor }}>
                                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C12 22 20 18 20 12C20 6 12 2 12 2C12 2 4 6 4 12C4 18 12 22 12 22Z" opacity="0.3"/><circle cx="12" cy="12" r="5"/></svg>
                             </div>
@@ -244,7 +277,11 @@
                             <div className="flex justify-between items-center w-full">
                                 <div>
                                     <h1 className={`text-3xl font-black italic ${isDarkMode ? 'text-white drop-shadow-[0_0_8px_#ec4899]' : 'text-[#1a237e]'}`}>KURA <span className={isDarkMode ? 'text-pink-400' : 'text-[#303f9f]'}>蔵</span></h1>
-                                    <div className={`h-[2px] w-12 mt-1 ${isDarkMode ? 'bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}></div>
+                                    <div className={`h-[2px] w-12 mt-1 relative overflow-hidden ${isDarkMode ? 'bg-pink-900/30' : 'bg-[#1a237e]/10'}`}>
+                                        {/* 同步進度條 */}
+                                        {isUpdating && <div className="absolute inset-0 bg-pink-500 animate-[shimmer_1.5s_infinite] w-full" style={{backgroundImage: 'linear-gradient(90deg, transparent, white, transparent)'}}></div>}
+                                        <div className={`h-full w-full ${isDarkMode ? 'bg-pink-500' : 'bg-[#1a237e]'}`}></div>
+                                    </div>
                                 </div>
                                 <div className="flex gap-1.5">
                                     <button onClick={() => setIsDeleteMode(!isDeleteMode)} className={`p-2 rounded-full border active:scale-90 transition-all ${isDeleteMode ? 'bg-red-500 border-red-500 text-white shadow-lg' : 'border-current opacity-60'} ${textColorClass}`}>
@@ -276,23 +313,24 @@
                                     {filteredItems.map(item => (
                                         <div key={item.id} className={`product-card p-2 rounded-[1.6rem] border transition-all duration-500 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white/60 border-[#1a237e]/10'} hover:shadow-xl`}>
                                             <div className="aspect-[4/5] rounded-[1.2rem] overflow-hidden mb-1.5 relative bg-black shadow-inner">
-                                                <a href={item.url} target="_blank" className="block w-full h-full" onClick={(e) => isDeleteMode && e.preventDefault()}>
+                                                <a href={item.url} target="_blank" className="block w-full h-full" onClick={(e) => {
+                                                    if(isDeleteMode) { e.preventDefault(); return; }
+                                                    setLastVisitedId(item.id); // 記下要同步的商品
+                                                }}>
                                                     <img src={item.image} className="w-full h-full object-cover" alt="" />
                                                 </a>
                                                 {isDeleteMode && (
-                                                    <button onClick={() => { if(confirm("移除收藏？")) wishlistRef.doc(item.id).delete(); }} className="absolute top-1 right-1 p-1.5 bg-red-600 text-white rounded-full shadow-lg active:scale-95 z-30"><Icon name="close" size={12} /></button>
+                                                    <button onClick={() => { if(confirm("移除這件珍藏？")) wishlistRef.doc(item.id).delete(); }} className="absolute top-1 right-1 p-1.5 bg-red-600 text-white rounded-full shadow-lg active:scale-95 z-30"><Icon name="close" size={12} /></button>
                                                 )}
                                                 <div className={`absolute bottom-1.5 left-1.5 px-2 py-0.5 text-[6.5px] font-black text-white rounded shadow-md ${isDarkMode ? 'bg-pink-600' : 'bg-[#1a237e]'}`}>{item.brand}</div>
                                             </div>
                                             <h3 className={`text-[9px] font-black line-clamp-2 leading-tight mb-1 h-6 overflow-hidden ${textColorClass}`}>{item.title}</h3>
-                                            
-                                            {/* 價格區域佈局重新設計：放大匯率換算價格 */}
                                             <div className="mt-auto flex justify-between items-center border-t border-current/5 pt-1.5 pb-0.5">
                                                 <div className="flex flex-col">
                                                     <div className={`text-[8px] font-black opacity-50 uppercase tracking-tighter ${textColorClass}`}>{item.currency} {item.price}</div>
                                                     <div className={`text-[12px] font-black leading-tight ${isDarkMode ? 'text-pink-400' : 'text-[#1a237e]'}`}>$ {Math.round(item.price * (CURRENCY_RATES[item.currency] || 1))} <span className="text-[7px] font-bold">TWD</span></div>
                                                 </div>
-                                                <a href={item.url} target="_blank" className={`p-1.5 rounded-lg bg-current/5 hover:bg-current/10 active:scale-90 transition-all ${textColorClass}`}><Icon name="external" size={12} /></a>
+                                                <a href={item.url} target="_blank" onClick={() => setLastVisitedId(item.id)} className={`p-1.5 rounded-lg bg-current/5 hover:bg-current/10 active:scale-90 transition-all ${textColorClass}`}><Icon name="external" size={12} /></a>
                                             </div>
                                         </div>
                                     ))}
@@ -312,7 +350,7 @@
                         </footer>
 
                         {isModalOpen && (
-                            <div className="fixed inset-0 z-[100] flex items-end justify-center">
+                            <div className="fixed inset-0 z-[100] flex items-end justify-center font-pop">
                                 <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
                                 <div className={`relative w-full rounded-t-[2.5rem] border-t-2 modal-enter safe-pb transition-all duration-500 overflow-hidden ${isDarkMode ? 'bg-[#222222] border-pink-900/50 text-[#D1D5DB]' : 'bg-[#d7ccc8] border-[#1a237e]/30 text-[#1a237e]'}`}>
                                     <div className={`h-2 w-16 absolute top-4 left-1/2 -translate-x-1/2 rounded-full opacity-20 ${isDarkMode ? 'bg-white' : 'bg-[#1a237e]'}`}></div>
@@ -321,39 +359,14 @@
                                         <button onClick={() => setIsModalOpen(false)} className="p-2 opacity-50 text-2xl font-pop">✕</button>
                                     </div>
                                     
-                                    <div className="modal-inner-scroll no-scrollbar font-pop">
+                                    <div className="modal-inner-scroll no-scrollbar">
                                         <div className="space-y-5">
                                             {status && <div className="bg-pink-500/20 text-pink-400 text-[10px] font-black p-3 rounded-xl text-center border border-pink-500/30 animate-pulse">{status}</div>}
-
                                             <div className="space-y-1"><label className="text-[10px] font-black uppercase opacity-60">網址擷取 (AI)</label><div className="flex gap-2 w-full"><input type="text" placeholder="https://..." className="flex-1 bg-white/10 border-b-2 border-current/20 p-3 outline-none rounded-xl" value={newItem.url} onChange={e => setNewItem({...newItem, url: e.target.value})} /><button onClick={fetchMetadata} disabled={isFetching} className={`px-5 py-3 rounded-2xl text-xs font-black text-white ${isDarkMode ? 'bg-pink-600 hover:bg-pink-500 shadow-md' : 'bg-[#1a237e]'}`}>{isFetching ? '...' : 'GET'}</button></div></div>
-                                            
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase opacity-60">商品圖片</label>
-                                                {newItem.image ? (
-                                                    <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden border-2 border-current/10 bg-black/10 shadow-inner">
-                                                        <img src={newItem.image} className="w-full h-full object-contain" alt="" />
-                                                        <button onClick={() => setNewItem({...newItem, image: ''})} className="absolute top-2 right-2 p-3 bg-red-600 text-white rounded-full shadow-lg active:scale-90 transition-all"><Icon name="close" size={18} /></button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-4">
-                                                        <div className="flex gap-4 border-b border-current/10 pb-1 font-black text-[10px]"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`${newItem.imageMode === 'url' ? 'border-b-2 border-current' : 'opacity-40'}`}>網址連結</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`${newItem.imageMode === 'upload' ? 'border-b-2 border-current' : 'opacity-40'}`}>相簿上傳</button></div>
-                                                        {newItem.imageMode === 'url' ? <input placeholder="貼上商品圖片網址..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : 
-                                                        <div className="border-2 border-dashed border-current/20 rounded-2xl p-4 text-center cursor-pointer bg-white/5 active:bg-white/10" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=async(e)=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload=async(ev)=>{ const c=await compressImage(ev.target.result); setNewItem(p=>({...p, image:c})); }; r.readAsDataURL(f); }; i.click(); }}><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase tracking-widest">點擊選取或拍照</p></div>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">名稱</label><input placeholder="商品名稱" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-black" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} /></div>
-                                                <div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">品牌</label><input placeholder="品牌" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-black" value={newItem.brand} onChange={e => setNewItem({...newItem, brand: e.target.value})} /></div>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">分類</label><input placeholder="外套/包包" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-black" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} /></div>
-                                                <div className="grid grid-cols-2 gap-2"><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">價格</label><input type="number" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono font-black" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} /></div><div className="space-y-1"><label className="text-[9px] font-black opacity-50 uppercase">幣別</label><select className="w-full bg-transparent border-b-2 border-current/20 p-2 text-xs outline-none font-mono font-black" value={newItem.currency} onChange={e => setNewItem({...newItem, currency: e.target.value})}>{Object.keys(CURRENCY_RATES).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div></div>
-                                            </div>
-                                            
-                                            <button onClick={addItem} disabled={isSaving || isFetching} className={`w-full py-5 rounded-[2rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40 hover:bg-pink-500' : 'bg-[#1a237e] shadow-[#1a237e]/30'}`}>{isSaving ? 'Processing...' : 'Archive Consignment 蔵'}</button>
+                                            <div className="space-y-2"><label className="text-[10px] font-black uppercase opacity-60">圖片預覽</label>{newItem.image ? (<div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden border-2 border-current/10 bg-black/10"><img src={newItem.image} className="w-full h-full object-contain" /><button onClick={() => setNewItem({...newItem, image: ''})} className="absolute top-2 right-2 p-3 bg-red-600 text-white rounded-full shadow-lg active:scale-90"><Icon name="close" size={18} /></button></div>) : (<div className="space-y-4"><div className="flex gap-4 border-b border-current/10 pb-1 font-black text-[10px]"><button onClick={() => setNewItem({...newItem, imageMode: 'url'})} className={`${newItem.imageMode === 'url' ? 'border-b-2 border-current' : 'opacity-40'}`}>連結</button><button onClick={() => setNewItem({...newItem, imageMode: 'upload'})} className={`${newItem.imageMode === 'upload' ? 'border-b-2 border-current' : 'opacity-40'}`}>相簿</button></div>{newItem.imageMode === 'url' ? <input placeholder="貼上網址..." className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} /> : <div className="border-2 border-dashed border-current/20 rounded-2xl p-6 text-center cursor-pointer bg-white/5 active:bg-white/10" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=async(e)=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload=async(ev)=>{ const c=await compressImage(ev.target.result); setNewItem(p=>({...p, image:c})); }; r.readAsDataURL(f); }; i.click(); }}><Icon name="upload" size={24} className="mx-auto mb-1 opacity-50" /><p className="text-[10px] font-black opacity-40 uppercase tracking-widest">點擊拍照或上傳</p></div>}</div>)}</div>
+                                            <div className="grid grid-cols-2 gap-4"><div className="space-y-1 w-full"><label className="text-[9px] font-black opacity-50 uppercase">名稱</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-black" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} /></div><div className="space-y-1 w-full"><label className="text-[9px] font-black opacity-50 uppercase">品牌</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-black" value={newItem.brand} onChange={e => setNewItem({...newItem, brand: e.target.value})} /></div></div>
+                                            <div className="grid grid-cols-2 gap-4"><div className="space-y-1 w-full"><label className="text-[9px] font-black opacity-50 uppercase">分類</label><input className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-black" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} /></div><div className="grid grid-cols-2 gap-2 w-full"><div className="space-y-1 w-full"><label className="text-[9px] font-black opacity-50 uppercase">價格</label><input type="number" className="w-full bg-transparent border-b-2 border-current/20 p-2 text-sm outline-none font-mono font-black" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} /></div><div className="space-y-1 w-full"><label className="text-[9px] font-black opacity-50 uppercase">幣別</label><select className="w-full bg-transparent border-b-2 border-current/20 p-2 text-xs outline-none font-mono font-black" value={newItem.currency} onChange={e => setNewItem({...newItem, currency: e.target.value})}>{Object.keys(CURRENCY_RATES).map(c => <option key={c} value={c} className="text-black">{c}</option>)}</select></div></div></div>
+                                            <button onClick={addItem} disabled={isSaving || isFetching} className={`w-full py-5 rounded-[2rem] text-white font-black uppercase text-lg shadow-2xl transition-all active:scale-95 mt-4 font-pop ${isDarkMode ? 'bg-pink-600 shadow-pink-500/40 hover:bg-pink-500' : 'bg-[#1a237e] shadow-[#1a237e]/30'}`}>{isSaving ? 'Processing...' : 'Archive Consignment 蔵'}</button>
                                         </div>
                                     </div>
                                 </div>
